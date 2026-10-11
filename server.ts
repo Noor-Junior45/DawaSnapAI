@@ -605,6 +605,12 @@ app.post("/api/cron/check-expiry", async (req, res) => {
   }
 });
 
+// Public app-ads.txt for Google AdMob crawler verification
+app.get("/app-ads.txt", (req, res) => {
+  res.type("text/plain");
+  res.send("google.com, pub-5865716270182311, DIRECT, f08c47fec0942fa0\n");
+});
+
 // ============================================================
 // 6. SERVE STATIC ASSETS IN PRODUCTION OR VITE IN DEV
 // ============================================================

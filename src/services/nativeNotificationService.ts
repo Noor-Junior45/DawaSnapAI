@@ -132,11 +132,28 @@ export async function initNativeNotifications(): Promise<boolean> {
           await PushNotifications.removeAllListeners().catch(() => {});
 
           // On successful FCM registration token received
-          PushNotifications.addListener('registration', (token) => {
+          PushNotifications.addListener('registration', async (token) => {
             console.log('[FCM] Push registration successful, FCM Token:', token.value);
             try {
               localStorage.setItem('dawasnap_fcm_token', token.value);
               localStorage.setItem('dawalens_fcm_token', token.value);
+              
+              // Persist token to Firestore user_push_tokens collection
+              try {
+                const { db, auth, doc, setDoc } = await import('../firebase');
+                const currentUserId = auth.currentUser?.uid || 'anonymous_device';
+                const tokenRef = doc(db, 'user_push_tokens', `${currentUserId}_${token.value.slice(-12)}`);
+                await setDoc(tokenRef, {
+                  userId: currentUserId,
+                  token: token.value,
+                  platform: 'android',
+                  appVersion: '1.1.5',
+                  updatedAt: new Date().toISOString(),
+                }, { merge: true });
+                console.log('[FCM] Successfully persisted Android push token to Firestore');
+              } catch (dbErr) {
+                console.warn('[FCM] Firestore token sync warning:', dbErr);
+              }
             } catch {
               // Ignore storage errors
             }

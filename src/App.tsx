@@ -513,7 +513,7 @@ export default function App() {
   }, [user]);
 
   // Native Android Closed-App Notifications Setup
-  // Requests Android POST_NOTIFICATIONS permission, creates notification channels, and syncs toggle
+  // Requests Android POST_NOTIFICATIONS permission, creates notification channels, and syncs toggle & FCM token
   useEffect(() => {
     const setupNative = async () => {
       if (Capacitor.isNativePlatform()) {
@@ -523,6 +523,11 @@ export default function App() {
             setBrowserNotificationsEnabled(true);
             if (user?.uid) {
               handleUpdateConfig({ browserNotificationsEnabled: true });
+              // Sync cached FCM token to backend / Firestore if available
+              const cachedFcmToken = localStorage.getItem('dawasnap_fcm_token');
+              if (cachedFcmToken) {
+                registerBrowserPushTokenWithServer(user.uid, cachedFcmToken).catch(() => {});
+              }
             }
           }
         } catch (e) {
