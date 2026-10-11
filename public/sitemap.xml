@@ -5,31 +5,31 @@
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
   <url>
     <loc>https://dawasnap.vercel.app/</loc>
-    <lastmod>2026-10-08</lastmod>
+    <lastmod>2026-10-11</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://dawasnap.vercel.app/guide</loc>
-    <lastmod>2026-10-08</lastmod>
+    <lastmod>2026-10-11</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://dawasnap.vercel.app/privacy</loc>
-    <lastmod>2026-10-08</lastmod>
+    <lastmod>2026-10-11</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://dawasnap.vercel.app/terms</loc>
-    <lastmod>2026-10-08</lastmod>
+    <lastmod>2026-10-11</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://dawasnap.vercel.app/delete-account</loc>
-    <lastmod>2026-10-08</lastmod>
+    <lastmod>2026-10-11</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
