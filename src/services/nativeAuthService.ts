@@ -18,10 +18,46 @@ export interface NativeAuthResult {
   isCancelled?: boolean;
 }
 
+function isCancellationError(err: any): boolean {
+  if (!err) return false;
+  const msg = String(err?.message || err?.code || err || '').toLowerCase();
+  return (
+    msg.includes('cancel') ||
+    msg.includes('12501') ||
+    msg.includes('16') ||
+    msg.includes('closed by user') ||
+    msg.includes('popup-closed') ||
+    msg.includes('user canceled') ||
+    msg.includes('user cancelled')
+  );
+}
+
+function isPlayServicesConfigError(err: any): boolean {
+  if (!err) return false;
+  const msg = String(err?.message || err?.code || err || '');
+  return (
+    msg.includes('10:') ||
+    msg.includes('10 :') ||
+    msg.includes('code 10') ||
+    msg.includes('DEVELOPER_ERROR') ||
+    msg.includes('ApiException: 10')
+  );
+}
+
 function formatAuthError(error: any): string {
   if (!error) return 'Failed to sign in with Google';
-  const code = error.code || '';
-  const message = error.message || String(error);
+  const code = String(error?.code || '');
+  const message = String(error?.message || error || '');
+
+  if (isPlayServicesConfigError(error)) {
+    return 'Google Play App Signing SHA-1 Required (Error 10):\n\n' +
+      'Google Play re-signs your app with a different key (Play App Signing key) than your local build, which is why it works on Indus Appstore but shows Error 10 on Play Store.\n\n' +
+      'How to fix in 2 minutes:\n' +
+      '1. Open Google Play Console > Your App > Setup > App integrity (under App signing).\n' +
+      '2. Copy the "SHA-1 certificate fingerprint" of the App signing key certificate.\n' +
+      '3. Open Firebase Console > Project Settings > Your apps (Android) > click "Add fingerprint" and paste it.\n' +
+      '4. Download the new google-services.json and rebuild your app.';
+  }
 
   if (code === 'auth/unauthorized-domain' || message.includes('unauthorized-domain')) {
     return 'Domain Unauthorized: Please add this domain to Firebase Console > Authentication > Settings > Authorized domains.';
@@ -45,17 +81,55 @@ export async function signInWithGoogleAdaptive(): Promise<NativeAuthResult> {
 
   if (isNative) {
     try {
-      // 1. Invoke native Google Play Services sign-in sheet on Android
-      // Using Credential Manager without offline scopes (Google ID Token includes email, name, photo)
       let result: any = null;
+      let lastError: any = null;
+
+      // 1. Try modern Credential Manager sheet (Android 14+ / updated Play Services)
       try {
         result = await FirebaseAuthentication.signInWithGoogle();
       } catch (credMgrErr: any) {
-        console.warn('Credential Manager sign-in attempt warning, falling back to legacy Play Services:', credMgrErr);
-        // If Credential Manager is unavailable or fails, fallback to legacy GoogleSignInClient
-        result = await FirebaseAuthentication.signInWithGoogle({
-          useCredentialManager: false,
-        });
+        lastError = credMgrErr;
+
+        if (isCancellationError(credMgrErr)) {
+          return {
+            success: false,
+            isCancelled: true,
+            error: 'Sign in was cancelled',
+          };
+        }
+
+        // If Error 10 (DEVELOPER_ERROR) occurred, it is a Play App Signing SHA-1 mismatch.
+        // Trying legacy GoogleSignInClient will just pop up a second account picker and fail with the same Error 10.
+        if (isPlayServicesConfigError(credMgrErr)) {
+          console.warn('Play Services SHA-1 config error (10) detected in Credential Manager:', credMgrErr);
+          return {
+            success: false,
+            error: formatAuthError(credMgrErr),
+          };
+        }
+
+        // Credential Manager is unsupported or threw a non-config error; try legacy GoogleSignInClient
+        console.warn('Credential Manager attempt warning, falling back to legacy Play Services:', credMgrErr);
+        try {
+          result = await FirebaseAuthentication.signInWithGoogle({
+            useCredentialManager: false,
+          });
+          lastError = null;
+        } catch (legacyErr: any) {
+          lastError = legacyErr;
+          if (isCancellationError(legacyErr)) {
+            return {
+              success: false,
+              isCancelled: true,
+              error: 'Sign in was cancelled',
+            };
+          }
+          console.error('Legacy Google Sign-In failed:', legacyErr);
+        }
+      }
+
+      if (lastError && !result) {
+        throw lastError;
       }
 
       // 2. If native credential was returned, synchronize with Firebase Web SDK
@@ -102,13 +176,7 @@ export async function signInWithGoogleAdaptive(): Promise<NativeAuthResult> {
     } catch (nativeError: any) {
       console.warn('Native Google Sign-In attempt error:', nativeError);
 
-      const errMsg = nativeError?.message || String(nativeError);
-      if (
-        errMsg.includes('cancelled') ||
-        errMsg.includes('canceled') ||
-        errMsg.includes('12501') ||
-        errMsg.includes('Closed by user')
-      ) {
+      if (isCancellationError(nativeError)) {
         return {
           success: false,
           isCancelled: true,
@@ -131,7 +199,7 @@ export async function signInWithGoogleAdaptive(): Promise<NativeAuthResult> {
       user: res.user,
     };
   } catch (error: any) {
-    if (error.code === 'auth/popup-closed-by-user') {
+    if (isCancellationError(error)) {
       return {
         success: false,
         isCancelled: true,

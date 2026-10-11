@@ -198,6 +198,7 @@ export default function App() {
   const [interactionResult, setInteractionResult] = useState<InteractionResult | null>(null);
   const [isCheckingInteractions, setIsCheckingInteractions] = useState(false);
   const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
+  const [isGoogleLoggingIn, setIsGoogleLoggingIn] = useState(false);
 
   // Auth State Listener with safety timeout to prevent app launch freezing
   useEffect(() => {
@@ -745,6 +746,7 @@ export default function App() {
   }, [user, medicines]);
 
   const handleLogin = async () => {
+    setIsGoogleLoggingIn(true);
     try {
       const res = await signInWithGoogleAdaptive();
       if (res.success) {
@@ -753,9 +755,13 @@ export default function App() {
         }
         trackEvent('login', { method: 'google' });
       } else if (!res.isCancelled) {
+        setIsGoogleLoggingIn(false);
         setAlertMessage(res.error || 'Failed to sign in with Google. Please try again.');
+      } else {
+        setIsGoogleLoggingIn(false);
       }
     } catch (error: any) {
+      setIsGoogleLoggingIn(false);
       if (error.code === 'auth/popup-closed-by-user') {
         // Silently handle popup closure
         return;
@@ -2319,20 +2325,34 @@ export default function App() {
             </button>
           </form>
 
-          {/* Continue with Google button - Matching Soft White */}
+          {/* Continue with Google button - Matching Soft White with Interactive Loading Animation */}
           <div className="w-full">
             <button
               id="google-login-btn"
               type="button"
+              disabled={isGoogleLoggingIn}
               onClick={handleGoogleSignInWithConsent}
-              className="w-full py-3.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-full font-bold text-sm text-slate-800 flex items-center justify-center gap-2.5 transition-all shadow-xs active:scale-[0.99] cursor-pointer"
+              className={`w-full py-3.5 bg-white border rounded-full font-bold text-sm text-slate-800 flex items-center justify-center gap-2.5 transition-all shadow-xs active:scale-[0.99] relative overflow-hidden ${
+                isGoogleLoggingIn
+                  ? 'border-[#0f9d58]/40 bg-slate-50/90 cursor-wait'
+                  : 'hover:bg-slate-50 border-slate-300 cursor-pointer'
+              }`}
             >
-              <img
-                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-                alt="Google"
-                className="w-4 h-4"
-              />
-              <span>Continue with Google</span>
+              {isGoogleLoggingIn ? (
+                <div className="flex items-center gap-2.5 py-0.5">
+                  <div className="w-4 h-4 border-2 border-[#0f9d58]/30 border-t-[#0f9d58] rounded-full animate-spin" />
+                  <span className="text-[#0f9d58] font-bold animate-pulse">Signing in & syncing data...</span>
+                </div>
+              ) : (
+                <>
+                  <img
+                    src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                    alt="Google"
+                    className="w-4 h-4"
+                  />
+                  <span>Continue with Google</span>
+                </>
+              )}
             </button>
           </div>
 
@@ -2425,8 +2445,7 @@ export default function App() {
                 <div className="w-16 h-16 bg-[#0f9d58]/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Info className="text-[#0f9d58]" size={32} />
                 </div>
-                <h3 className="text-xl font-bold text-[#1f1f1f] mb-2">Notice</h3>
-                <p className="text-slate-600 text-sm mb-6">{alertMessage}</p>
+                <p className="text-slate-600 text-sm mb-6 whitespace-pre-line text-left max-h-64 overflow-y-auto">{alertMessage}</p>
                 <button 
                   onClick={() => setAlertMessage(null)}
                   className="w-full py-3 bg-[#0f9d58] text-white rounded-xl font-bold hover:bg-[#0f9d58]/95 transition-all shadow-sm"
@@ -2464,10 +2483,6 @@ export default function App() {
                   </span>
                 </div>
                 
-                <p className="text-slate-500 text-[13px] leading-relaxed mb-6">
-                  Please look for a link sent through your mail. Check your inbox and spam folder to complete resetting your password.
-                </p>
-                
                 <button 
                   onClick={() => setPasswordResetEmailSent(null)}
                   className="w-full py-3 bg-[#0f9d58] text-white rounded-xl font-bold hover:bg-[#0f9d58]/95 transition-all shadow-sm active:scale-[0.98]"
@@ -2475,6 +2490,55 @@ export default function App() {
                   Got It, Thanks!
                 </button>
               </div>
+            </motion.div>
+          )}
+
+          {/* Google Sign-In Active Syncing Overlay Animation */}
+          {isGoogleLoggingIn && (
+            <motion.div
+              key="auth-google-syncing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/45 backdrop-blur-md"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="w-full max-w-xs bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-3xl p-6 text-center shadow-2xl flex flex-col items-center"
+              >
+                {/* Pulsing Google Multi-Color Ambient Ring */}
+                <div className="relative w-16 h-16 flex items-center justify-center mb-4">
+                  <div className="absolute inset-0 rounded-full border-4 border-[#0f9d58]/20 animate-ping opacity-60" />
+                  <div className="absolute inset-0 rounded-full border-3 border-transparent border-t-[#4285F4] border-r-[#EA4335] border-b-[#FBBC05] border-l-[#34A853] animate-spin" />
+                  <div className="w-10 h-10 bg-white rounded-full shadow-xs flex items-center justify-center z-10">
+                    <img
+                      src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                      alt="Google"
+                      className="w-5 h-5"
+                    />
+                  </div>
+                </div>
+
+                <h3 className="text-base font-black text-slate-800 tracking-tight mb-1">
+                  Signing In with Google
+                </h3>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed mb-4">
+                  Synchronizing health vault &amp; profile...
+                </p>
+
+                {/* Smooth Animated Loading Bar */}
+                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-linear-to-r from-[#4285F4] via-[#34A853] to-[#FBBC05]"
+                    initial={{ x: "-100%" }}
+                    animate={{ x: "100%" }}
+                    transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
+                  />
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -3086,8 +3150,7 @@ export default function App() {
               <div className="w-16 h-16 bg-[#0f9d58]/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Info className="text-[#0f9d58]" size={32} />
               </div>
-              <h3 className="text-xl font-bold text-[#1f1f1f] mb-2">Notice</h3>
-              <p className="text-slate-600 text-sm mb-6">{alertMessage}</p>
+              <p className="text-slate-600 text-sm mb-6 whitespace-pre-line text-left max-h-64 overflow-y-auto">{alertMessage}</p>
               <button 
                 onClick={() => setAlertMessage(null)}
                 className="w-full py-3 bg-[#0f9d58] text-white rounded-xl font-bold hover:bg-[#0f9d58]/95 transition-all shadow-sm"

@@ -285,26 +285,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* POWER INTEGRATIONS & TOOLS */}
           <div className="space-y-3">
             <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-[#0f9d58] px-1">Power Integrations & Tools</h4>
-            <div className="grid grid-cols-1 gap-1">
-              {/* In-App Mailbox */}
-              <button 
-                onClick={() => { onOpenMailbox(); onClose(); }}
-                className="flex items-center gap-3 w-full text-left p-2.5 hover:bg-[#faf8f5] border border-transparent hover:border-slate-100 rounded-xl transition-all group"
-              >
-                <Mail className="text-[#ea4335]" size={16} />
-                <div>
-                  <span className="text-[12px] font-bold text-[#1f1f1f] block leading-none">Treatment Mailbox</span>
-                  <span className="text-[10px] text-[#5f6368] block mt-0.5">Secure emails & reports</span>
-                </div>
-              </button>
-
+            
+            {/* Side-by-side Import and Export Box Cards */}
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 w-full">
               {/* Import CSV */}
-              <label className="flex items-center gap-3 w-full text-left p-2.5 hover:bg-[#faf8f5] border border-transparent hover:border-slate-100 rounded-xl transition-all group cursor-pointer">
-                <Upload className="text-[#0f9d58]" size={16} />
-                <div>
-                  <span className="text-[12px] font-bold text-[#1f1f1f] block leading-none">Import CSV Backup</span>
-                  <span className="text-[10px] text-[#5f6368] block mt-0.5">Restore vault medicines</span>
+              <label className="flex items-center justify-center gap-2 sm:gap-2.5 p-2.5 sm:p-3 bg-white hover:bg-[#faf8f5] border border-[#e3e2e0] hover:border-[#0f9d58]/40 rounded-xl sm:rounded-2xl shadow-3xs hover:shadow-xs transition-all group cursor-pointer active:scale-[0.98]">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-50 text-[#0f9d58] flex items-center justify-center shrink-0 border border-emerald-100/80 shadow-3xs group-hover:scale-105 transition-transform">
+                  <Upload size={15} />
                 </div>
+                <span className="text-[12px] sm:text-[13px] font-bold text-[#1f1f1f] truncate group-hover:text-[#0f9d58] transition-colors leading-tight">
+                  Import CSV
+                </span>
                 <input 
                   type="file" 
                   accept=".csv" 
@@ -319,16 +310,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Export CSV */}
               <button 
+                type="button"
                 onClick={() => { onExportCSV(); onClose(); }}
-                className="flex items-center gap-3 w-full text-left p-2.5 hover:bg-[#faf8f5] border border-transparent hover:border-slate-100 rounded-xl transition-all group"
+                className="flex items-center justify-center gap-2 sm:gap-2.5 p-2.5 sm:p-3 bg-white hover:bg-[#faf8f5] border border-[#e3e2e0] hover:border-[#ab47bc]/40 rounded-xl sm:rounded-2xl shadow-3xs hover:shadow-xs transition-all group cursor-pointer active:scale-[0.98]"
               >
-                <Download className="text-[#ab47bc]" size={16} />
-                <div>
-                  <span className="text-[12px] font-bold text-[#1f1f1f] block leading-none">Export CSV Backup</span>
-                  <span className="text-[10px] text-[#5f6368] block mt-0.5">Download full database</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-purple-50 text-[#ab47bc] flex items-center justify-center shrink-0 border border-purple-100/80 shadow-3xs group-hover:scale-105 transition-transform">
+                  <Download size={15} />
                 </div>
+                <span className="text-[12px] sm:text-[13px] font-bold text-[#1f1f1f] truncate group-hover:text-[#ab47bc] transition-colors leading-tight">
+                  Export CSV
+                </span>
               </button>
             </div>
+
+            {/* In-App Mailbox */}
+            <button 
+              type="button"
+              onClick={() => { onOpenMailbox(); onClose(); }}
+              className="flex items-center w-full p-3 bg-white hover:bg-[#faf8f5] border border-[#e3e2e0] rounded-2xl shadow-3xs hover:shadow-xs transition-all group cursor-pointer text-left active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-red-50 text-[#ea4335] flex items-center justify-center shrink-0 border border-red-100/80 shadow-3xs group-hover:scale-105 transition-transform">
+                  <Mail size={16} />
+                </div>
+                <div>
+                  <span className="text-[12px] font-bold text-[#1f1f1f] block leading-none group-hover:text-[#ea4335] transition-colors">Treatment Mailbox</span>
+                  <span className="text-[10px] text-[#5f6368] block mt-1">Secure emails & reports</span>
+                </div>
+              </div>
+            </button>
           </div>
 
           {/* ALERTS & RECURRING REMINDERS */}
@@ -409,7 +419,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Expiry Window */}
             <div className="space-y-1.5 pt-3 border-t border-slate-100 px-1">
-              <span className="text-[9px] font-bold text-[#5f6368] block uppercase">Expiry Warning Window</span>
+              <span className="text-[11px] sm:text-[12px] font-bold text-[#0f9d58] block uppercase tracking-wider">Expiry Warning Window</span>
               <div className="grid grid-cols-3 gap-1.5">
                 {[30, 60, 90].map((days, dIdx) => (
                   <button
@@ -430,7 +440,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Low Stock */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3 px-1">
               <div className="flex-1">
-                <span className="text-[12px] font-semibold text-[#1f1f1f] block">Low Stock Limit</span>
+                <span className="text-[12px] sm:text-[13px] font-bold text-[#0f9d58] block leading-tight">Low Stock Limit</span>
                 <span className="text-[10px] text-[#5f6368] block">Alert when medication pills are low</span>
               </div>
               <input
