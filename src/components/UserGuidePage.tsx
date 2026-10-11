@@ -183,15 +183,26 @@ export const UserGuidePage: React.FC<UserGuidePageProps> = ({ onBack }) => {
               </li>
               <li>
                 <strong>Dosage Form Classification:</strong> Select the accurate formulation form:
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 font-mono text-xs text-[#1c1917]">
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 mt-2 font-mono text-xs text-[#1c1917]">
                   <div className="bg-[#ede5d6]/60 p-2 rounded text-center">💊 Tablet</div>
                   <div className="bg-[#ede5d6]/60 p-2 rounded text-center">💊 Capsule</div>
-                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🧴 Syrup / Liquid</div>
-                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">💉 Ampule / Vial</div>
-                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">📦 Powder / ORS</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🧴 Syrup</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">💧 Drops</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🧴 Cream</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🧴 Lotion</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🧼 Soap</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🪶 Ointment</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🧪 Gel</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">💨 Spray</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🌬️ Inhaler</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">💉 Injection</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">💉 Ampule</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">✨ Powder</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">📦 Sachet</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🧪 Suspension</div>
                   <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🩹 Tape / Patch</div>
-                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">💧 Topical Wash</div>
-                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">🌿 Other (Drops/Ointment)</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">💧 Liquid</div>
+                  <div className="bg-[#ede5d6]/60 p-2 rounded text-center">📦 Other</div>
                 </div>
               </li>
               <li>Enter the remaining unit quantity and set the expiration date.</li>

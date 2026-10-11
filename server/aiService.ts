@@ -433,7 +433,7 @@ FIELD-BY-FIELD INSTRUCTIONS:
    - Do NOT confuse manufacturing date (MFG / B.No) with expiry date (EXP).
 
 4. "form":
-   - Identify the exact formulation: "tablet", "capsule", "syrup", "ampule", "powder", "tape", "liquid", or "other".
+   - Identify the exact formulation: "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", or "other".
 
 5. "quantity":
    - Look for pack size (e.g., "10 Tablets", "15 Capsules", "Strip of 10", "100ml").
@@ -477,9 +477,14 @@ FIELD-BY-FIELD INSTRUCTIONS:
               name: { type: Type.STRING },
               dosage: { type: Type.STRING },
               expirationDate: { type: Type.STRING },
-              usageInstructions: { type: Type.STRING },
-              form: { type: Type.STRING, enum: ["tablet", "capsule", "syrup", "ampule", "powder", "tape", "liquid", "other"] },
-              quantity: { type: Type.NUMBER },
+              form: { 
+                type: Type.STRING, 
+                enum: [
+                  "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
+                  "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
+                  "powder", "sachet", "suspension", "tape", "liquid", "other"
+                ] 
+              },
               categories: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING }
@@ -543,15 +548,26 @@ export async function categorizeMedicinesServer(
 For each of the following medicines:
 1. Identify and verify its accurate pharmaceutical dosage form (form).
    Analyze the product name, brand/generic formulation, dosage (e.g. mg vs ml vs vial), and instructions.
-   Allowed forms:
+    Allowed forms:
    - "tablet": Tablets, pills, caplets, dispersible tabs, chewable tablets, sublingual tablets
    - "capsule": Gelatin capsules, softgels, hard capsules, cap
-   - "syrup": Liquids, syrups, suspensions, oral solutions, pediatric drops, elixirs
-   - "ampule": Injectables, ampules, vials, IV/IM infusions, injections
-   - "powder": Dry syrup powder, sachets, granules, ORS oral rehydration powder
+   - "syrup": Liquids, syrups, cough syrups, pediatric syrups, elixirs
+   - "drops": Eye drops, ear drops, nasal drops, pediatric oral drops
+   - "cream": Topical creams, vanishing creams, hydrocortisone cream, antifungal cream
+   - "lotion": Topical lotions, calamine lotion, moisturizing lotions, cleansing lotions
+   - "soap": Medicated soaps, cleansing bars, acne bathing bars
+   - "ointment": Topical ointments, greasy petroleum-based balms, eye ointments
+   - "gel": Topical gels, emulgels, pain relief gels (e.g. Volini, Diclofenac gel), antacid gels
+   - "spray": Nasal sprays, throat sprays, aerosol pain relief sprays (e.g. Moov, Relispray)
+   - "inhaler": Metered dose inhalers (MDI), dry powder inhalers (DPI), rotahalers, respules
+   - "injection": Injectable solutions, vials, pre-filled syringes, IV/IM infusions
+   - "ampule": Glass ampules, sterile single-dose injection liquid
+   - "powder": Dry syrup powder, reconstitution powder, ORS oral rehydration powder
+   - "sachet": Single-use powder packets, effervescent drink sachets, granule sachets
+   - "suspension": Oral suspensions, pediatric suspensions, antacid suspensions
    - "tape": Transdermal patches, medical tape, medicinal plasters
-   - "liquid": Topical liquids, lotions, gargles, antiseptic washes
-   - "other": Creams, ointments, inhalers, eye/ear drops, sprays
+   - "liquid": Topical liquids, mouthwashes, gargles, antiseptic washes, oral solutions
+   - "other": Only if none of the above match.
    If the existing form is already provided and correct, keep it. If it is missing, empty, or 'other', allot the true dosage form.
 
 2. Assign all accurate clinical categories:
@@ -574,7 +590,7 @@ Return a JSON array of objects with schema:
     "id": string (the exact id passed in),
     "category": string (e.g. "Fever, Pain Relief"),
     "categories": string[] (e.g. ["Fever", "Pain Relief"]),
-    "form": string (must be one of: "tablet", "capsule", "syrup", "ampule", "powder", "tape", "liquid", "other")
+    "form": string (must be one of: "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "other")
   }
 ]`;
 
@@ -596,7 +612,11 @@ Return a JSON array of objects with schema:
                 },
                 form: { 
                   type: Type.STRING,
-                  enum: ["tablet", "capsule", "syrup", "ampule", "powder", "tape", "liquid", "other"]
+                  enum: [
+                    "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
+                    "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
+                    "powder", "sachet", "suspension", "tape", "liquid", "other"
+                  ]
                 }
               },
               required: ["id", "category", "form"]
@@ -666,20 +686,40 @@ Return a JSON array of objects with schema:
       // Verify or allot dosage form
       let form: string = m.form || 'other';
       if (!m.form || m.form === 'other') {
-        if (/syrup|suspension|drops|liquid|solution|elixir|oral sol|cough syrup/i.test(lower)) {
-          form = 'syrup';
-        } else if (/capsule|cap|softgel/i.test(lower)) {
+        if (/capsule|cap\b|softgel/i.test(lower)) {
           form = 'capsule';
-        } else if (/ampul|ampule|vial|injection|inj\b|iv|im\b/i.test(lower)) {
+        } else if (/cream|crème/i.test(lower)) {
+          form = 'cream';
+        } else if (/lotion/i.test(lower)) {
+          form = 'lotion';
+        } else if (/soap|bar\b|cleanser/i.test(lower)) {
+          form = 'soap';
+        } else if (/ointment|unguentum/i.test(lower)) {
+          form = 'ointment';
+        } else if (/gel\b|emulgel/i.test(lower)) {
+          form = 'gel';
+        } else if (/drops?|eye\s*drops?|ear\s*drops?|nasal\s*drops?|ophthalmic/i.test(lower)) {
+          form = 'drops';
+        } else if (/inhaler|rotahaler|inhalation|respule/i.test(lower)) {
+          form = 'inhaler';
+        } else if (/spray\b/i.test(lower)) {
+          form = 'spray';
+        } else if (/injection|inj\b|infusion/i.test(lower)) {
+          form = 'injection';
+        } else if (/ampul|ampule|vial/i.test(lower)) {
           form = 'ampule';
-        } else if (/powder|sachet|granule|ors/i.test(lower)) {
+        } else if (/sachet|granule/i.test(lower)) {
+          form = 'sachet';
+        } else if (/suspension|oral\s*susp/i.test(lower)) {
+          form = 'suspension';
+        } else if (/syrup|cough\s*syrup|elixir/i.test(lower)) {
+          form = 'syrup';
+        } else if (/powder|ors\b/i.test(lower)) {
           form = 'powder';
         } else if (/patch|tape|plaster/i.test(lower)) {
           form = 'tape';
-        } else if (/lotion|liniment/i.test(lower)) {
+        } else if (/liquid|solution|wash|gargle/i.test(lower)) {
           form = 'liquid';
-        } else if (/tablet|tab|chewable|dispersible|effervescent|pill/i.test(lower)) {
-          form = 'tablet';
         } else {
           form = 'tablet'; // Default clinical form for standard solid medications
         }
@@ -694,6 +734,175 @@ Return a JSON array of objects with schema:
     });
 
     return { success: true, categorized: fallbackCategorized, isFallback: true };
+  }
+}
+
+/**
+ * Auto-allot accurate formulation dosage forms to medicines that have not been allotted yet.
+ * Specifically filters for unallotted medicines (missing form or form='other') and uses Gemini
+ * with clinical pharmacy reasoning to allot the true formulation (cream, lotion, soap,
+ * ointment, gel, spray, inhaler, injection, suspension, sachet, drops, syrup, tablet, capsule, etc.).
+ */
+export async function autoAllotFormulationsServer(
+  medicines: { id: string; name: string; dosage?: string; usageInstructions?: string; form?: string }[]
+) {
+  if (!medicines || medicines.length === 0) {
+    return { success: true, allotted: [] };
+  }
+
+  // Filter to medicines that need allotment
+  const unallotted = medicines.filter(m => !m.form || m.form === 'other' || m.form.trim() === '');
+  if (unallotted.length === 0) {
+    return { success: true, allotted: [] };
+  }
+
+  try {
+    return await runWithRotation('extraction', async (ai) => {
+      const prompt = `You are an expert AI Pharmacist and pharmaceutical formulation specialist for a medical store inventory.
+For each of the following medicines whose dosage form is NOT yet allotted (missing, empty, or currently 'other'):
+Analyze the brand name, active salt composition, dosage/strength, and clinical instructions to allot its exact dosage formulation from this standard medical store formulation list:
+- "tablet": Solid tablets, caplets, chewables, dispersible, effervescent, sublingual
+- "capsule": Gelatin capsules, softgels, hard capsules
+- "syrup": Oral liquid syrups, cough syrups, pediatric syrups, elixirs
+- "drops": Eye drops, ear drops, nasal drops, pediatric oral drops
+- "cream": Topical creams, hydrocortisone cream, antifungal cream, vanishing cream
+- "lotion": Topical lotions, calamine lotion, moisturizing lotions, cleansing lotions
+- "soap": Medicated soap bars, antibacterial cleansing bars, acne bathing bars
+- "ointment": Greasy topical ointments, eye ointments, petroleum-based balms
+- "gel": Topical pain relief gels (e.g. Volini, Omni gel, Diclofenac), antacid oral gels, cooling gels
+- "spray": Aerosol sprays, nasal sprays, pain relief sprays (e.g. Moov, Relispray)
+- "inhaler": Metered dose inhalers (MDI), dry powder inhalers (DPI), rotahalers, respules
+- "injection": Injectable vials, IV/IM infusions, prefilled syringes
+- "ampule": Single-dose sterile glass ampules
+- "powder": Dusting powders, ORS rehydration powder, dry antibiotic powder
+- "sachet": Powder/granule sachets, effervescent drink sachets (e.g. Eno)
+- "suspension": Antacid oral suspensions, pediatric suspensions
+- "tape": Transdermal patches, medicated tape/plaster
+- "liquid": Antiseptic liquids (e.g. Dettol, Betadine), mouthwash, oral solutions
+- "other": Only if none of the above medical store formulations fit.
+
+Medicines to allot:
+${JSON.stringify(unallotted.map(m => ({
+  id: m.id,
+  name: m.name,
+  dosage: m.dosage || '',
+  usageInstructions: m.usageInstructions || '',
+  currentForm: m.form || 'unallotted'
+})), null, 2)}
+
+Return a JSON array of objects:
+[
+  {
+    "id": string,
+    "form": string (must be one of: "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "other"),
+    "confidence": number (between 0.0 and 1.0),
+    "explanation": string (short justification, max 100 chars, e.g. "Identified topical antifungal cream formulation")
+  }
+]`;
+
+      const response = await generateContentWithModelFallback(ai, {
+        preferredModel: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                form: { 
+                  type: Type.STRING,
+                  enum: [
+                    "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
+                    "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
+                    "powder", "sachet", "suspension", "tape", "liquid", "other"
+                  ]
+                },
+                confidence: { type: Type.NUMBER },
+                explanation: { type: Type.STRING }
+              },
+              required: ["id", "form"]
+            }
+          }
+        }
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("AI returned empty response");
+      let cleanedJson = text.trim();
+      if (cleanedJson.startsWith("```")) {
+        cleanedJson = cleanedJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+      }
+      const results = JSON.parse(cleanedJson);
+      return { success: true, allotted: results };
+    });
+  } catch (error: any) {
+    console.warn("Server autoAllotFormulationsServer falling back to heuristics:", error.message);
+    const fallbackAllotted = unallotted.map(m => {
+      const lower = (m.name + ' ' + (m.usageInstructions || '') + ' ' + (m.dosage || '')).toLowerCase();
+      let form = 'tablet';
+      let explanation = 'Defaulted to standard solid oral formulation';
+      if (/capsule|cap\b|softgel/i.test(lower)) {
+        form = 'capsule';
+        explanation = 'Identified capsule packaging keywords';
+      } else if (/cream|crème/i.test(lower)) {
+        form = 'cream';
+        explanation = 'Identified topical cream formulation';
+      } else if (/lotion/i.test(lower)) {
+        form = 'lotion';
+        explanation = 'Identified topical lotion formulation';
+      } else if (/soap|bar\b|cleanser/i.test(lower)) {
+        form = 'soap';
+        explanation = 'Identified medicated soap formulation';
+      } else if (/ointment|unguentum/i.test(lower)) {
+        form = 'ointment';
+        explanation = 'Identified topical ointment formulation';
+      } else if (/gel\b|emulgel/i.test(lower)) {
+        form = 'gel';
+        explanation = 'Identified topical gel formulation';
+      } else if (/drops?|eye\s*drops?|ear\s*drops?|nasal\s*drops?|ophthalmic/i.test(lower)) {
+        form = 'drops';
+        explanation = 'Identified ophthalmic/otic drops';
+      } else if (/inhaler|rotahaler|inhalation|respule/i.test(lower)) {
+        form = 'inhaler';
+        explanation = 'Identified respiratory inhaler';
+      } else if (/spray\b/i.test(lower)) {
+        form = 'spray';
+        explanation = 'Identified medicinal spray formulation';
+      } else if (/injection|inj\b|infusion/i.test(lower)) {
+        form = 'injection';
+        explanation = 'Identified injectable medicine';
+      } else if (/ampul|ampule|vial/i.test(lower)) {
+        form = 'ampule';
+        explanation = 'Identified sterile ampule/vial';
+      } else if (/sachet|granule/i.test(lower)) {
+        form = 'sachet';
+        explanation = 'Identified medicinal sachet packet';
+      } else if (/suspension|oral\s*susp/i.test(lower)) {
+        form = 'suspension';
+        explanation = 'Identified oral liquid suspension';
+      } else if (/syrup|cough\s*syrup|elixir/i.test(lower)) {
+        form = 'syrup';
+        explanation = 'Identified liquid syrup formulation';
+      } else if (/powder|ors\b/i.test(lower)) {
+        form = 'powder';
+        explanation = 'Identified oral powder formulation';
+      } else if (/patch|tape|plaster/i.test(lower)) {
+        form = 'tape';
+        explanation = 'Identified transdermal patch/tape';
+      } else if (/liquid|solution|wash|gargle/i.test(lower)) {
+        form = 'liquid';
+        explanation = 'Identified liquid solution formulation';
+      }
+      return {
+        id: m.id,
+        form,
+        confidence: 0.9,
+        explanation
+      };
+    });
+    return { success: true, allotted: fallbackAllotted, isFallback: true };
   }
 }
 

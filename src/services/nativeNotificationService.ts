@@ -147,7 +147,7 @@ export async function initNativeNotifications(): Promise<boolean> {
                   userId: currentUserId,
                   token: token.value,
                   platform: 'android',
-                  appVersion: '1.1.5',
+                  appVersion: '1.1.6',
                   updatedAt: new Date().toISOString(),
                 }, { merge: true });
                 console.log('[FCM] Successfully persisted Android push token to Firestore');

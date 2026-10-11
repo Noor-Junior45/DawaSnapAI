@@ -1490,10 +1490,22 @@ export function extractMedicineOfflineSlm(
   // Form detection: combine CNN visual features with knowledge base
   let form: MedicineForm = cnnFeatures?.form || matchedDrug?.defaultForm || 'tablet';
   if (/capsule|cap\b/i.test(cleanOcr)) form = 'capsule';
-  else if (/syrup|suspension|oral\s*solution|drops/i.test(cleanOcr)) form = 'syrup';
-  else if (/injection|ampule|vial/i.test(cleanOcr)) form = 'ampule';
-  else if (/powder|sachet/i.test(cleanOcr)) form = 'powder';
-  else if (/ointment|cream|gel|tube/i.test(cleanOcr)) form = 'other';
+  else if (/cream|crème/i.test(cleanOcr)) form = 'cream';
+  else if (/lotion/i.test(cleanOcr)) form = 'lotion';
+  else if (/soap|bar\b|cleanser/i.test(cleanOcr)) form = 'soap';
+  else if (/ointment|unguentum/i.test(cleanOcr)) form = 'ointment';
+  else if (/gel\b|emulgel/i.test(cleanOcr)) form = 'gel';
+  else if (/drops?|eye\s*drops?|ear\s*drops?|nasal\s*drops?/i.test(cleanOcr)) form = 'drops';
+  else if (/inhaler|rotahaler|inhalation|respule/i.test(cleanOcr)) form = 'inhaler';
+  else if (/spray/i.test(cleanOcr)) form = 'spray';
+  else if (/injection|inj\b|infusion/i.test(cleanOcr)) form = 'injection';
+  else if (/ampule|ampul|vial/i.test(cleanOcr)) form = 'ampule';
+  else if (/sachet/i.test(cleanOcr)) form = 'sachet';
+  else if (/suspension/i.test(cleanOcr)) form = 'suspension';
+  else if (/syrup|oral\s*solution|elixir/i.test(cleanOcr)) form = 'syrup';
+  else if (/powder|ors\b/i.test(cleanOcr)) form = 'powder';
+  else if (/tape|patch|plaster/i.test(cleanOcr)) form = 'tape';
+  else if (/liquid|solution/i.test(cleanOcr)) form = 'liquid';
 
   // Dosage resolution
   let dosage = hints?.potentialDosage;

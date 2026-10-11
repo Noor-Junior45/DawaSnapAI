@@ -16,7 +16,8 @@ import {
   Camera, 
   Lock, 
   Ban, 
-  FileText
+  FileText,
+  Gift
 } from 'lucide-react';
 import { useEdgeSwipeBack } from '../utils/mobileGestures';
 import { triggerLightHaptic } from '../utils/haptics';
@@ -71,12 +72,12 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
                 Terms of Service &amp; Clinical Usage Agreement
               </h2>
               <p className="text-xs sm:text-sm font-semibold text-[#78716c] uppercase tracking-wider mt-1.5">
-                Ref: DAWASNAP-TOS-2026-V2.5 &bull; Governing Law: Republic of India
+                Ref: DAWASNAP-TOS-2026-V3.0 &bull; Governing Law: Republic of India &bull; App Version: 1.1.6
               </p>
             </div>
             <div className="text-xs sm:text-sm text-[#78716c] font-medium sm:text-right shrink-0">
-              <div>Effective Date: October 3, 2026</div>
-              <div>Last Revised: October 3, 2026</div>
+              <div>Effective Date: October 11, 2026</div>
+              <div>Last Revised: October 11, 2026</div>
             </div>
           </div>
 
@@ -223,6 +224,16 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
               </div>
               <p className="text-[#44403c]">
                 For offline access and instant response times, DawaSnap AI embeds an on-device, rule-based clinical pharmacology reference engine and heuristic packaging classifier. The reference engine operates completely locally in device RAM. <strong>Strict Zero-Training Guarantee:</strong> User conversations, scanned medications, and adherence logs are NEVER collected, stored, or utilized to train or fine-tune artificial intelligence models.
+              </p>
+            </div>
+
+            <div className="border-l-4 border-amber-500 bg-[#fefbf6] border border-amber-200/80 p-4 rounded-r-xl space-y-2">
+              <div className="flex items-center gap-2 font-bold text-amber-950 text-sm sm:text-base">
+                <Gift size={18} className="text-amber-600 shrink-0" />
+                2.4 Advertising, Chat Quotas &amp; Rewarded Video Features
+              </div>
+              <p className="text-[#44403c]">
+                To support free access to pharmaceutical tools, DawaSnap AI provides standard non-intrusive banner advertisements and a fair daily consultation limit (10 free chats per calendar day). Users may optionally opt-in to watch a short Google AdMob rewarded video ad to receive bonus consultation credits (+3 chats per viewed ad). Rewarded ads are 100% voluntary and user-initiated; zero personal health data, medication inventory details, or diagnostic queries are ever shared with or accessible by advertising partners.
               </p>
             </div>
 

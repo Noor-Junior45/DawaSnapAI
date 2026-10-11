@@ -558,7 +558,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* Sign Out Button placed directly inside the page below Danger Zone */}
-          <div className="pt-3 pb-4 flex justify-center">
+          <div className="pt-3 pb-2 flex flex-col items-center justify-center gap-2">
             <button 
               onClick={onLogout}
               className="w-full max-w-[320px] py-3.5 bg-[#ea4335] hover:bg-[#ea4335]/90 text-white rounded-full transition-all font-bold flex items-center justify-center gap-2 text-sm shadow-md hover:shadow-lg active:scale-98"
@@ -566,6 +566,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <LogOut size={16} />
               Sign Out
             </button>
+            <p className="text-[11px] font-medium text-slate-400 mt-1 select-none">
+              DawaSnap AI &bull; Version 1.1.6 (Build 8)
+            </p>
           </div>
 
       </main>

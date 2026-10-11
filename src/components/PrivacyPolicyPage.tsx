@@ -62,12 +62,12 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
                 Privacy Policy &amp; Data Safety Declaration
               </h2>
               <p className="text-xs sm:text-sm font-semibold text-[#78716c] uppercase tracking-wider mt-1.5">
-                Ref: DAWASNAP-PRIVACY-2026-V2.5 &bull; Legal Jurisdiction: India &amp; Global (GDPR)
+                Ref: DAWASNAP-PRIVACY-2026-V3.0 &bull; Legal Jurisdiction: India &amp; Global (GDPR) &bull; App Version: 1.1.6
               </p>
             </div>
             <div className="text-xs sm:text-sm text-[#78716c] font-medium sm:text-right shrink-0">
-              <div>Effective Date: October 3, 2026</div>
-              <div>Last Revised: October 3, 2026</div>
+              <div>Effective Date: October 11, 2026</div>
+              <div>Last Revised: October 11, 2026</div>
             </div>
           </div>
 
@@ -527,6 +527,13 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
                     <td className="p-3.5 font-bold text-[#1c1917] whitespace-nowrap align-top bg-[#f7f2e8]/70">Resend Inc.</td>
                     <td className="p-3.5 align-top">Transactional delivery of automated expiration reminder emails.</td>
                     <td className="p-3.5 font-medium align-top">SOC 2 Type II Certified, GDPR Compliant.</td>
+                  </tr>
+                  <tr className="hover:bg-[#f3ede1]/60 transition-colors">
+                    <td className="p-3.5 font-bold text-[#1c1917] whitespace-nowrap align-top bg-[#f7f2e8]/70">Google LLC (Google AdMob)</td>
+                    <td className="p-3.5 align-top">
+                      In-app banner and user-initiated rewarded video ad delivery (used to reward additional chat quota). Strictly zero health data, medicine names, dosages, or prescription scans are transmitted to AdMob. AdMob processes standard mobile advertising identifiers according to Google AdMob privacy standards and user consent choices.
+                    </td>
+                    <td className="p-3.5 font-medium align-top">COPPA, GDPR &amp; DPDP Compliant (Non-personalized ads by default for privacy).</td>
                   </tr>
                   <tr className="hover:bg-[#f3ede1]/60 transition-colors">
                     <td className="p-3.5 font-bold text-[#1c1917] whitespace-nowrap align-top bg-[#f7f2e8]/70">Vercel Inc. &amp; Render Services</td>

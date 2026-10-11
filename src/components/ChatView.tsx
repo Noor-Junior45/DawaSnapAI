@@ -27,6 +27,17 @@ import { DoctorLogo } from './DoctorLogo';
 import { sendEmailAlert, getConsultationReportEmailHTML } from '../services/emailService';
 import { trackEvent } from '../utils/analytics';
 import { getApiUrl, getDirectRenderUrl } from '../utils/apiConfig';
+import { showRewardedAd } from '../services/admobService';
+import {
+  getChatQuota,
+  recordChatUsed,
+  grantBonusChats,
+  syncQuotaFromCloud,
+  subscribeToQuota,
+  BASE_DAILY_CHAT_LIMIT,
+  CHATS_PER_REWARD,
+  ChatQuotaState,
+} from '../services/chatQuotaService';
 
 interface ChatViewProps {
   onClose: () => void;
@@ -59,7 +70,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onClose, medicines, user, us
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
   const [keyStatus, setKeyStatus] = useState<{ hasKey: boolean; checkedAt?: string; error?: string } | null>(null);
 
-  const [chatCount, setChatCount] = useState<number>(0);
+  const [chatQuota, setChatQuota] = useState<ChatQuotaState>(() => getChatQuota(user?.uid));
+  const [isWatchingAd, setIsWatchingAd] = useState<boolean>(false);
+  const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Mobile Resizing & Sheet Drag State (Phone)
@@ -291,19 +304,42 @@ export const ChatView: React.FC<ChatViewProps> = ({ onClose, medicines, user, us
     }
   }, [keyStatus]);
 
-  // Load daily chat count
+  // Sync and subscribe to daily consultation quota
   useEffect(() => {
-    if (!user) return;
-    const loadChatCount = async () => {
-      try {
-        const count = await getChatCountToday(user.uid);
-        setChatCount(count);
-      } catch (err) {
-        console.error("Failed to load chat count:", err);
+    setChatQuota(getChatQuota(user?.uid));
+    if (user?.uid) {
+      syncQuotaFromCloud(user.uid).then(q => setChatQuota(q)).catch(() => {});
+    }
+    const unsubscribe = subscribeToQuota((updated) => {
+      setChatQuota(updated);
+    });
+    return unsubscribe;
+  }, [user?.uid]);
+
+  const handleWatchRewardedAd = async () => {
+    if (isWatchingAd) return;
+    setIsWatchingAd(true);
+    setQuotaNotice(null);
+    try {
+      const res = await showRewardedAd();
+      if (res.rewarded) {
+        const added = res.amount || CHATS_PER_REWARD;
+        const updated = await grantBonusChats(added, user?.uid);
+        setChatQuota(updated);
+        setQuotaNotice(`+${added} chats added! 🎉`);
+        setTimeout(() => setQuotaNotice(null), 3000);
+      } else if (res.error) {
+        setQuotaNotice('Ad dismissed early. Watch fully to earn chats.');
+        setTimeout(() => setQuotaNotice(null), 3500);
       }
-    };
-    loadChatCount();
-  }, [user]);
+    } catch (err) {
+      console.warn('Failed to display rewarded ad:', err);
+      setQuotaNotice('Unable to load video ad right now.');
+      setTimeout(() => setQuotaNotice(null), 3000);
+    } finally {
+      setIsWatchingAd(false);
+    }
+  };
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -382,6 +418,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onClose, medicines, user, us
     const textToSend = (customPrompt || input).trim();
     if (!textToSend || isLoading) return;
 
+    // Check consultation quota cap (10 daily base + rewarded bonus)
+    const currentQuota = getChatQuota(user?.uid);
+    if (currentQuota.remaining <= 0) {
+      setQuotaNotice('Daily cap reached! Watch an ad below to unlock +3 chats.');
+      setTimeout(() => setQuotaNotice(null), 4500);
+      return;
+    }
+
     const messageId = crypto.randomUUID();
     const userMsg: ChatMessage = {
       id: messageId,
@@ -389,6 +433,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onClose, medicines, user, us
       content: textToSend,
       timestamp: Date.now()
     };
+
+    // Deduct 1 chat from remaining quota immediately
+    recordChatUsed(user?.uid).then(q => setChatQuota(q)).catch(() => {});
 
     // 1. Optimistically update local message state immediately for zero-lag UI response
     const isSlmTask = isSlmSpecializedTask(textToSend);
@@ -942,7 +989,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onClose, medicines, user, us
           </div>
 
           {/* Input Bar Section */}
-          <div className="bg-[#f0f2f5] border-t border-slate-200/80 shrink-0 safe-bottom z-20 py-2.5 pb-4">
+          <div className="bg-[#f0f2f5] border-t border-slate-200/80 shrink-0 safe-bottom z-20 py-2 pb-3">
             <div className="w-full">
               {/* Input Row */}
               <div className="px-4 flex items-center gap-3">
@@ -954,7 +1001,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onClose, medicines, user, us
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Type a message..."
+                    placeholder={chatQuota.remaining === 0 ? "Daily limit reached. Watch ad to unlock chats..." : "Type a message..."}
                     className="w-full bg-white border border-slate-200 rounded-full py-3.5 px-5 text-[14px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#0f9d58]/30 placeholder:text-slate-400 shadow-inner"
                   />
                 </div>
@@ -963,10 +1010,40 @@ export const ChatView: React.FC<ChatViewProps> = ({ onClose, medicines, user, us
                 <button
                   onClick={() => handleSendMessage()}
                   disabled={isLoading}
-                  className="p-3.5 rounded-full bg-[#00a884] hover:bg-[#008f72] text-white transition-all shadow-md active:scale-90 flex items-center justify-center shrink-0 cursor-pointer"
+                  className="p-3.5 rounded-full bg-[#00a884] hover:bg-[#008f72] text-white transition-all shadow-md active:scale-90 flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-60"
                   title="Send Message"
                 >
                   {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} className="stroke-[2.5]" />}
+                </button>
+              </div>
+
+              {/* Minimal Text Indicator (No box, no borders, purely small text below typing box) */}
+              <div className="px-6 pt-1.5 flex items-center justify-between text-[11px] select-none">
+                <span className={chatQuota.remaining === 0 ? "text-red-500 font-medium" : chatQuota.remaining <= 2 ? "text-amber-600 font-medium" : "text-slate-500"}>
+                  {quotaNotice ? (
+                    <span className="text-[#008f72] font-semibold">{quotaNotice}</span>
+                  ) : chatQuota.remaining > 0 ? (
+                    `${chatQuota.remaining}/${chatQuota.limit + chatQuota.bonus} chats remaining today`
+                  ) : (
+                    'Chat limit reached (0 remaining)'
+                  )}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleWatchRewardedAd}
+                  disabled={isWatchingAd}
+                  className="text-[#008f72] hover:text-[#007a62] font-semibold cursor-pointer flex items-center gap-1 transition-colors disabled:opacity-60 ml-2"
+                  title="Watch video ad to get +3 consultation chats"
+                >
+                  {isWatchingAd ? (
+                    <>
+                      <Loader2 size={11} className="animate-spin inline" />
+                      <span>Loading ad...</span>
+                    </>
+                  ) : (
+                    <span>Watch ad (+3 chats)</span>
+                  )}
                 </button>
               </div>
             </div>

@@ -3,7 +3,7 @@ import { Medicine, MedicineForm } from '../types';
 import { 
   Calendar, Package, AlertTriangle, CheckCircle2, Clock, Trash2, 
   CheckSquare, Square, Minus, Heart, Layers, Edit3, XCircle, AlertCircle, 
-  ChevronDown, ChevronUp, Sparkles, Filter, RefreshCw, X, Plus
+  ChevronDown, ChevronUp, Sparkles, Filter, RefreshCw, X, Plus, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MEDICINE_FORM_ICONS, getCategoryStyle, isCategoryMatch, getMedicineCategories } from '../constants';
@@ -21,6 +21,8 @@ interface MedicineListProps {
   onToggleLike?: (medicine: Medicine) => void;
   onAutoCategorize?: () => Promise<void>;
   isCategorizing?: boolean;
+  onAutoAllotFormulations?: () => Promise<void>;
+  isAllottingFormulations?: boolean;
   selectedCategory?: string;
   onSelectCategory?: (category: string) => void;
   isSelectionMode?: boolean;
@@ -59,6 +61,7 @@ interface GroupedMedicine {
 export const MedicineList: React.FC<MedicineListProps> = ({ 
   medicines, onEdit, onToggleTaken, onReduceQuantity, onDeleteMultiple, 
   lowQuantityThreshold, alertThreshold, onToggleLike, onAutoCategorize, isCategorizing = false,
+  onAutoAllotFormulations, isAllottingFormulations = false,
   selectedCategory = 'ALL', onSelectCategory,
   isSelectionMode: propIsSelectionMode,
   setIsSelectionMode: propSetIsSelectionMode,
@@ -77,16 +80,6 @@ export const MedicineList: React.FC<MedicineListProps> = ({
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
-  const [isBannerDismissed, setIsBannerDismissed] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem('dawasnap_hide_organize_banner') === 'true' ||
-             sessionStorage.getItem('dawalens_hide_organize_banner') === 'true' ||
-             localStorage.getItem('dawasnap_medicines_organized') === 'true' ||
-             localStorage.getItem('dawalens_medicines_organized') === 'true';
-    } catch {
-      return false;
-    }
-  });
 
   const toggleGroupExpanded = (groupKey: string) => {
     setExpandedGroupKeys(prev => {
@@ -329,6 +322,22 @@ export const MedicineList: React.FC<MedicineListProps> = ({
       m.category.toLowerCase() === 'uncategorized'
     )).length;
   }, [medicines]);
+
+  // Count of medicines whose formulation has not been allotted yet (missing or 'other')
+  const unallottedFormulationCount = React.useMemo(() => {
+    return medicines.filter(m => !m.isDeleted && (
+      !m.form ||
+      m.form === 'other' ||
+      m.form.trim() === ''
+    )).length;
+  }, [medicines]);
+
+  // Total count of unallocated items (unallotted formulations + uncategorized categories across all sections)
+  const totalUnallocatedCount = React.useMemo(() => {
+    return unallottedFormulationCount + uncategorizedCount;
+  }, [unallottedFormulationCount, uncategorizedCount]);
+
+  const hasUnallocatedItems = totalUnallocatedCount > 0;
 
   // Filter matcher for groups using universal canonical isCategoryMatch
   const matchesFilter = (group: GroupedMedicine) => {
@@ -850,71 +859,64 @@ export const MedicineList: React.FC<MedicineListProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Auto-Organize with AI Pharmacist Banner */}
-      {!isBannerDismissed && uncategorizedCount > 0 && onAutoCategorize && (
-        <div className="mx-1 mb-3 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50/70 to-emerald-50 border border-blue-100/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative">
-          <div className="flex items-start sm:items-center gap-2.5 pr-6 sm:pr-0">
-            <div className="w-8 h-8 rounded-xl bg-blue-600/10 text-blue-700 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
-              <Sparkles size={16} />
+      {/* Dr Jack Auto-Allot Banner: appears every time any medicine categories or formulations are not allotted */}
+      {hasUnallocatedItems && (onAutoCategorize || onAutoAllotFormulations) && (
+        <div className="mx-1 mb-3.5 p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-teal-50/80 to-emerald-50/90 border border-teal-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3.5 relative">
+          <div className="flex items-start md:items-center gap-3 pr-2">
+            <div className="w-9 h-9 rounded-xl bg-teal-600/15 text-teal-700 flex items-center justify-center shrink-0 mt-0.5 md:mt-0 shadow-2xs">
+              <Zap size={18} className="text-teal-700" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
-                <span>Organize with AI Pharmacist</span>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                  {uncategorizedCount} to organize
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
+                  Dr Jack
                 </span>
+                {unallottedFormulationCount > 0 && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
+                    {unallottedFormulationCount} Formulation{unallottedFormulationCount > 1 ? 's' : ''}
+                  </span>
+                )}
+                {uncategorizedCount > 0 && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200 shadow-2xs">
+                    {uncategorizedCount} Categor{uncategorizedCount > 1 ? 'ies' : 'y'}
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-slate-600 mt-0.5">
-                Automatically verify dosage forms (Tablet, Syrup, Capsule, Ampule) and assign clinical categories.
+              <p className="text-xs text-slate-600 mt-0.5 font-normal">
+                Auto-allot missing dosage forms and clinical categories.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 self-end sm:self-center">
+          <div className="flex items-center gap-2 flex-wrap self-start md:self-center shrink-0">
             <button
               type="button"
               onClick={async () => {
                 triggerMediumHaptic();
                 try {
-                  await onAutoCategorize();
-                  setIsBannerDismissed(true);
-                  try {
-                    sessionStorage.setItem('dawasnap_hide_organize_banner', 'true');
-                    sessionStorage.setItem('dawalens_hide_organize_banner', 'true');
-                  } catch {}
+                  if (onAutoAllotFormulations && unallottedFormulationCount > 0) {
+                    await onAutoAllotFormulations();
+                  }
+                  if (onAutoCategorize && uncategorizedCount > 0) {
+                    await onAutoCategorize();
+                  }
                 } catch (e) {
-                  console.error("Auto organize error:", e);
+                  console.error("Auto allot error:", e);
                 }
               }}
-              disabled={isCategorizing}
-              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-all shrink-0 disabled:opacity-50 touch-manipulation cursor-pointer"
+              disabled={isAllottingFormulations || isCategorizing}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 active:scale-95 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-all shrink-0 disabled:opacity-50 touch-manipulation cursor-pointer"
             >
-              {isCategorizing ? (
+              {isAllottingFormulations || isCategorizing ? (
                 <>
                   <RefreshCw size={13} className="animate-spin" />
-                  <span>Organizing...</span>
+                  <span>Auto-Allotting...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles size={13} />
-                  <span>Organize with AI Pharmacist</span>
+                  <Zap size={14} />
+                  <span>Auto Allot</span>
                 </>
               )}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                triggerLightHaptic();
-                setIsBannerDismissed(true);
-                try {
-                  sessionStorage.setItem('dawasnap_hide_organize_banner', 'true');
-                  sessionStorage.setItem('dawalens_hide_organize_banner', 'true');
-                } catch {}
-              }}
-              aria-label="Dismiss organize banner"
-              title="Dismiss banner"
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-blue-100/50 transition-colors cursor-pointer"
-            >
-              <X size={15} />
             </button>
           </div>
         </div>

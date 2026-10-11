@@ -19,7 +19,7 @@
         "taken": { "type": "boolean" },
         "isDeleted": { "type": "boolean" },
         "deletedAt": { "type": ["number", "null"] },
-        "form": { "type": "string", "enum": ["tablet", "capsule", "syrup", "ampule", "powder", "other"] },
+        "form": { "type": "string", "enum": ["tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "other"] },
         "schedule": { "type": "string" },
         "liked": { "type": "boolean" },
         "category": { "type": "string" },

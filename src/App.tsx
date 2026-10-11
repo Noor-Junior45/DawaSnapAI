@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Camera, Info, Settings, Search, X, History, Trash2, ShieldAlert, CheckCircle2, Mail, Pill, Shield, LogIn, Eye, EyeOff, Lock, Check, ChevronDown, ChevronLeft, RefreshCw, ArrowDown, ArrowUp, ArrowUpDown, ShieldCheck, BookOpen, FileText } from 'lucide-react';
+import { Plus, Camera, Info, Settings, Search, X, History, Trash2, ShieldAlert, CheckCircle2, Mail, Pill, Shield, LogIn, Eye, EyeOff, Lock, Check, ChevronDown, ChevronLeft, RefreshCw, ArrowDown, ArrowUp, ArrowUpDown, ShieldCheck, BookOpen, FileText, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Papa from 'papaparse';
 import { Medicine, MedicineForm as MedicineFormType } from './types';
@@ -9,7 +9,14 @@ import { MedicineList } from './components/MedicineList';
 import { SettingsModal } from './components/SettingsModal';
 import { ChatView } from './components/ChatView';
 import { MailboxModal } from './components/MailboxModal';
-import { extractMedicineData, checkDrugInteractions, InteractionResult, categorizeMedicinesWithAI } from './services/geminiService';
+import { 
+  extractMedicineData, 
+  checkDrugInteractions, 
+  InteractionResult, 
+  categorizeMedicinesWithAI,
+  autoAllotFormulationsWithGemini,
+  isFormulationUnallotted
+} from './services/geminiService';
 import { 
   auth, db, signOut, onAuthStateChanged, 
   collection, doc, setDoc, deleteDoc, updateDoc, writeBatch, onSnapshot, query, where, orderBy, getDocs, User,
@@ -49,6 +56,7 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { initNativePerformance, setNativeBackButtonHandler } from './services/nativePerformanceService';
 import { initNativeNotifications, scheduleNativeMedicineAlerts } from './services/nativeNotificationService';
+import { showBannerAd, hideBannerAd, onBannerHeightChange } from './services/admobService';
 import { useEdgeSwipeBack, usePullToRefresh } from './utils/mobileGestures';
 import { getApiUrl } from './utils/apiConfig';
 
@@ -146,7 +154,7 @@ export default function App() {
     };
   }, []);
 
-  const navigateToPublicPage = (page: PublicPageType) => {
+  const navigateToPublicPage = React.useCallback((page: PublicPageType) => {
     setPublicPage(page);
     try {
       if (page) {
@@ -157,7 +165,17 @@ export default function App() {
     } catch (e) {
       console.warn('History pushState error:', e);
     }
-  };
+  }, []);
+
+  const handleBackFromPublicPage = React.useCallback(() => {
+    navigateToPublicPage(null);
+    setOpenedFromSettings(prev => {
+      if (prev) {
+        setIsSettingsOpen(true);
+      }
+      return false;
+    });
+  }, [navigateToPublicPage]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -199,6 +217,37 @@ export default function App() {
   const [isCheckingInteractions, setIsCheckingInteractions] = useState(false);
   const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
   const [isGoogleLoggingIn, setIsGoogleLoggingIn] = useState(false);
+  const [admobBannerHeight, setAdmobBannerHeight] = useState(0);
+
+  // Listen for AdMob Banner height changes to dynamically adjust bottom clearance
+  useEffect(() => {
+    const unsubscribe = onBannerHeightChange((height) => {
+      setAdmobBannerHeight(height);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Manage AdMob Banner visibility: only active on main dashboard screen so it never covers modals/camera
+  const isMainDashboardActive = Boolean(
+    user &&
+    !publicPage &&
+    !activeSystemPage &&
+    !isCameraOpen &&
+    !isChatOpen &&
+    !isSettingsOpen &&
+    !isMailboxOpen &&
+    !activeFooterModal
+  );
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    if (isMainDashboardActive) {
+      showBannerAd().catch(() => {});
+    } else {
+      hideBannerAd().catch(() => {});
+    }
+  }, [isMainDashboardActive]);
 
   // Auth State Listener with safety timeout to prevent app launch freezing
   useEffect(() => {
@@ -1444,6 +1493,83 @@ export default function App() {
     }
   };
 
+  const [isAllottingFormulations, setIsAllottingFormulations] = useState(false);
+
+  const handleAutoAllotFormulations = async () => {
+    if (isAllottingFormulations) return;
+    const activeMeds = medicines.filter(m => !m.isDeleted);
+    const unallotted = activeMeds.filter(m => isFormulationUnallotted(m));
+
+    if (unallotted.length === 0) {
+      setAlertMessage("All medicines already have formulations allotted! No unassigned medicines found.");
+      return;
+    }
+
+    setIsAllottingFormulations(true);
+    try {
+      const allottedList = await autoAllotFormulationsWithGemini(unallotted);
+      if (allottedList && allottedList.length > 0) {
+        const allottedMap = new Map(allottedList.map(item => [item.id, item]));
+
+        // 1. Optimistic React state update
+        setMedicines(prev => prev.map(m => {
+          const item = allottedMap.get(m.id);
+          if (!item) return m;
+          return {
+            ...m,
+            form: item.form as MedicineFormType,
+            updatedAt: Date.now()
+          };
+        }));
+
+        setSelectedDetailsMedicine(prev => {
+          if (!prev) return prev;
+          const item = allottedMap.get(prev.id);
+          if (!item) return prev;
+          return {
+            ...prev,
+            form: item.form as MedicineFormType
+          };
+        });
+
+        // 2. Persist to Firestore if user logged in
+        if (user) {
+          try {
+            const batch = writeBatch(db);
+            allottedList.forEach(item => {
+              if (item && item.id) {
+                const medRef = doc(db, 'medicines', item.id);
+                batch.update(medRef, {
+                  form: item.form,
+                  updatedAt: serverTimestamp()
+                });
+              }
+            });
+            await batch.commit();
+          } catch (dbErr) {
+            console.warn("Firestore batch sync deferred/offline:", dbErr);
+          }
+        }
+
+        triggerSuccessHaptic();
+        const sampleDetails = allottedList.slice(0, 3).map(a => {
+          const m = unallotted.find(u => u.id === a.id);
+          return m ? `${m.name} (${a.form})` : a.form;
+        }).join(', ');
+        const extraText = allottedList.length > 3 ? ` and ${allottedList.length - 3} more` : '';
+        setAlertMessage(`Dr Jack successfully auto-allotted new formulations for ${allottedList.length} medicines: ${sampleDetails}${extraText}!`);
+        trackEvent('ai_allot_formulations_batch', { count: allottedList.length });
+      } else {
+        setAlertMessage("Could not allot formulations at this time.");
+      }
+    } catch (err: any) {
+      console.error("Auto allot formulations failed:", err);
+      setAlertMessage("Failed to auto-allot formulations with Dr Jack: " + (err.message || String(err)));
+    } finally {
+      setIsAllottingFormulations(false);
+    }
+  };
+
   const confirmClearData = async () => {
     if (!user || isSaving) return;
     setIsSaving(true);
@@ -1564,7 +1690,11 @@ export default function App() {
           const expirationDateRaw = row['Expiration Date'] || row['expirationDate'] || row['expiration_date'] || row['Expiry Date'] || row['expiryDate'] || row['expiry_date'];
           const usageInstructions = row['Usage Instructions'] || row['usageInstructions'] || row['usage_instructions'] || row['Notes'] || row['notes'] || '';
           const form = (row['Form'] || row['form'] || 'other').toLowerCase();
-          const validForm = ['tablet', 'capsule', 'syrup', 'ampule', 'powder', 'tape', 'liquid', 'other'].includes(form) ? form : 'other';
+          const validForm = [
+            'tablet', 'capsule', 'syrup', 'drops', 'cream', 'lotion', 'soap', 
+            'ointment', 'gel', 'spray', 'inhaler', 'injection', 'ampule', 
+            'powder', 'sachet', 'suspension', 'tape', 'liquid', 'other'
+          ].includes(form) ? form : 'other';
 
           if (name && expirationDateRaw) {
             let expirationDate = expirationDateRaw;
@@ -2075,14 +2205,6 @@ export default function App() {
     // STEP 7: Reset state
     setUser(null);
     setMedicines([]);
-  };
-
-  const handleBackFromPublicPage = () => {
-    navigateToPublicPage(null);
-    if (openedFromSettings) {
-      setIsSettingsOpen(true);
-      setOpenedFromSettings(false);
-    }
   };
 
   // PUBLIC LEGAL & GUIDE PAGES (Google Search Console & Play Store Compliant - No Login Required)
@@ -2616,7 +2738,10 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-2xl mx-auto pt-6 pb-32">
+      <main 
+        className="flex-1 w-full max-w-2xl mx-auto pt-6 transition-[padding] duration-300"
+        style={{ paddingBottom: `${128 + admobBannerHeight}px` }}
+      >
         {/* Pull-To-Refresh Visual Indicator with Mobile Haptics */}
         {(pullDistance > 0 || isPullRefreshing) && (
           <div 
@@ -2852,6 +2977,8 @@ export default function App() {
           onToggleLike={handleToggleLike}
           onAutoCategorize={handleAutoCategorize}
           isCategorizing={isCategorizing}
+          onAutoAllotFormulations={handleAutoAllotFormulations}
+          isAllottingFormulations={isAllottingFormulations}
           selectedCategory={selectedCategory}
           onSelectCategory={(cat) => {
             setSelectedCategory(cat);
@@ -2874,8 +3001,11 @@ export default function App() {
       </main>
 
       {/* Floating Action Bar */}
-      <div className="fixed bottom-6 left-0 right-0 z-40 px-6">
-        <div className="max-w-[320px] mx-auto bg-white/95 backdrop-blur-md border border-[#e3e2e0] rounded-full p-2 flex items-center justify-between shadow-[0_12px_40px_rgba(0,0,0,0.06)]">
+      <div 
+        className="fixed left-0 right-0 z-40 px-6 transition-[bottom] duration-300 pointer-events-none"
+        style={{ bottom: `${admobBannerHeight > 0 ? admobBannerHeight + 16 : 24}px` }}
+      >
+        <div className="max-w-[320px] mx-auto bg-white/95 backdrop-blur-md border border-[#e3e2e0] rounded-full p-2 flex items-center justify-between shadow-[0_12px_40px_rgba(0,0,0,0.06)] pointer-events-auto">
           <button 
             onClick={handleAddManual}
             className="flex-1 py-2 flex flex-col items-center gap-1 transition-all hover:opacity-80"

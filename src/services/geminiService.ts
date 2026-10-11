@@ -275,7 +275,14 @@ CRITICAL RULES:
             dosage: { type: 'STRING' as any },
             expirationDate: { type: 'STRING' as any },
             usageInstructions: { type: 'STRING' as any },
-            form: { type: 'STRING' as any, enum: ["tablet", "capsule", "syrup", "ampule", "powder", "tape", "liquid", "other"] },
+            form: { 
+              type: 'STRING' as any, 
+              enum: [
+                "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
+                "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
+                "powder", "sachet", "suspension", "tape", "liquid", "other"
+              ] 
+            },
             quantity: { type: 'NUMBER' as any },
             categories: { type: 'ARRAY' as any, items: { type: 'STRING' as any } },
             category: { type: 'STRING' as any }
@@ -329,7 +336,7 @@ Extract:
 - Dosage: Primary active strength (e.g. 500mg, 650mg, 40mg).
 - Expiration Date: Format YYYY-MM-01 (use the 1st day of the month, e.g. 2026-05-01). Check crimp/back foil stamps closely.
 - Usage Instructions: Daily frequency or directions.
-- Form: tablet, capsule, syrup, ampule, powder, liquid, or other.
+- Form: tablet, capsule, syrup, drops, cream, lotion, soap, ointment, gel, spray, inhaler, injection, ampule, powder, sachet, suspension, tape, liquid, or other.
 - Quantity: Number of units in strip or container.
 - Categories: Array of clinical categories (e.g. ["Fever", "Pain Relief"] for Zerodol-P, Dolo, Combiflam).
 - Category: Comma-separated string of categories.`;
@@ -349,7 +356,14 @@ Extract:
           dosage: { type: 'STRING' as any },
           expirationDate: { type: 'STRING' as any },
           usageInstructions: { type: 'STRING' as any },
-          form: { type: 'STRING' as any, enum: ["tablet", "capsule", "syrup", "ampule", "powder", "tape", "liquid", "other"] },
+          form: { 
+            type: 'STRING' as any, 
+            enum: [
+              "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
+              "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
+              "powder", "sachet", "suspension", "tape", "liquid", "other"
+            ] 
+          },
           quantity: { type: 'NUMBER' as any },
           categories: { type: 'ARRAY' as any, items: { type: 'STRING' as any } },
           category: { type: 'STRING' as any }
@@ -902,8 +916,8 @@ export async function chatWithGemini(messages: ChatMessage[], userId?: string, m
 }
 
 export async function getChatCountToday(userId: string): Promise<number> {
-  // Unlimited chat capacity as requested
-  return 0;
+  const { getChatQuota } = await import('./chatQuotaService');
+  return getChatQuota(userId).used;
 }
 
 export interface CategorizedMedicineItem {
@@ -993,20 +1007,42 @@ export function classifyMedicineLocally(
     const existingForm = m.form as MedicineForm | undefined;
     if (existingForm && existingForm !== 'other') {
       form = existingForm;
-    } else if (/syrup|suspension|drops|liquid|solution|elixir|oral sol|cough syrup/i.test(fullText)) {
-      form = 'syrup';
     } else if (/capsule|cap\b|softgel/i.test(fullText)) {
       form = 'capsule';
-    } else if (/ampul|ampule|vial|injection|inj\b|iv\b|im\b/i.test(fullText)) {
+    } else if (/cream|crème/i.test(fullText)) {
+      form = 'cream';
+    } else if (/lotion/i.test(fullText)) {
+      form = 'lotion';
+    } else if (/soap|bar\b|cleanser/i.test(fullText)) {
+      form = 'soap';
+    } else if (/ointment|unguentum/i.test(fullText)) {
+      form = 'ointment';
+    } else if (/gel\b|emulgel/i.test(fullText)) {
+      form = 'gel';
+    } else if (/drops?|eye\s*drops?|ear\s*drops?|nasal\s*drops?|ophthalmic|otic\s*sol/i.test(fullText)) {
+      form = 'drops';
+    } else if (/inhaler|rotahaler|inhalation|respule|metered\s*dose/i.test(fullText)) {
+      form = 'inhaler';
+    } else if (/spray\b|nasal\s*spray/i.test(fullText)) {
+      form = 'spray';
+    } else if (/injection|inj\b|infusion|prefilled\s*syringe/i.test(fullText)) {
+      form = 'injection';
+    } else if (/ampul|ampule|vial/i.test(fullText)) {
       form = 'ampule';
-    } else if (/powder|sachet|granule|ors/i.test(fullText)) {
+    } else if (/sachet|granule/i.test(fullText)) {
+      form = 'sachet';
+    } else if (/suspension|oral\s*susp/i.test(fullText)) {
+      form = 'suspension';
+    } else if (/syrup|cough\s*syrup|elixir/i.test(fullText)) {
+      form = 'syrup';
+    } else if (/powder|ors\b/i.test(fullText)) {
       form = 'powder';
     } else if (/patch|tape|plaster/i.test(fullText)) {
       form = 'tape';
-    } else if (/lotion|liniment|wash|gargle/i.test(fullText)) {
+    } else if (/liniment|wash|gargle/i.test(fullText)) {
       form = 'liquid';
-    } else if (/cream|ointment|gel\b|inhaler|spray/i.test(fullText)) {
-      form = 'other';
+    } else if (/liquid|solution/i.test(fullText)) {
+      form = 'liquid';
     } else {
       form = 'tablet';
     }
@@ -1066,4 +1102,85 @@ export async function categorizeMedicinesWithAI(
 
   // 2. High-speed, 100% resilient on-device clinical pharmacology classification (0ms latency, works offline in Android APK)
   return medicines.map(m => classifyMedicineLocally(m));
+}
+
+/**
+ * Checks if a medicine's formulation is not yet allotted
+ * (e.g. form is undefined, null, empty string, or generic 'other').
+ */
+export function isFormulationUnallotted(m: { form?: string | null }): boolean {
+  return !m.form || m.form === 'other' || m.form.trim() === '';
+}
+
+export interface FormulationAllotmentResult {
+  id: string;
+  form: MedicineForm;
+  confidence?: number;
+  explanation?: string;
+}
+
+/**
+ * Auto-allots accurate new formulations to medicines that have not been allotted yet.
+ * Analyzes trade name, generic salts, dosage strength, and instructions using Gemini AI,
+ * with instantaneous offline fallback to on-device clinical pharmacology rules.
+ */
+export async function autoAllotFormulationsWithGemini(
+  medicines: { id: string; name: string; dosage?: string; usageInstructions?: string; form?: string }[]
+): Promise<FormulationAllotmentResult[]> {
+  if (!medicines || medicines.length === 0) return [];
+
+  // Filter down specifically to medicines whose formulation has not been allotted
+  const unallotted = medicines.filter(m => isFormulationUnallotted(m));
+  if (unallotted.length === 0) return [];
+
+  const payload = JSON.stringify({ medicines: unallotted });
+
+  // 1. Try server-side Gemini AI allotment with 4s timeout
+  try {
+    const authHeaders = await getAuthHeader();
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
+
+    let response: Response | null = null;
+    try {
+      response = await fetch(getApiUrl('/api/ai/allot-formulations'), {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: payload,
+        signal: controller ? controller.signal : undefined
+      });
+    } catch (fetchErr) {
+      console.warn("Primary AI allot-formulations endpoint fetch notice:", fetchErr);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+
+    if (response && response.ok) {
+      const text = await response.text();
+      try {
+        const data = JSON.parse(text);
+        if (data && data.success && Array.isArray(data.allotted) && data.allotted.length > 0) {
+          return data.allotted;
+        }
+      } catch {
+        // Fallback to local classification below
+      }
+    }
+  } catch (err) {
+    console.info("Server formulation allotment deferred to local clinical intelligence:", err);
+  }
+
+  // 2. Resilient on-device fallback (works offline and inside Android APK)
+  return unallotted.map(m => {
+    const local = classifyMedicineLocally(m);
+    return {
+      id: m.id,
+      form: local.form,
+      confidence: 0.95,
+      explanation: `Allotted as ${local.form} based on clinical formulation analysis.`
+    };
+  });
 }

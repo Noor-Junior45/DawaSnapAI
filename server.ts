@@ -10,6 +10,7 @@ import {
   extractMedicineDataServer, 
   checkDrugInteractionsServer, 
   categorizeMedicinesServer,
+  autoAllotFormulationsServer,
   chatWithGeminiServer,
   getAvailableKeys
 } from "./server/aiService.ts";
@@ -437,6 +438,20 @@ app.post("/api/ai/categorize", aiRateLimiter, requireFirebaseAuth, async (req: A
       return res.status(400).json({ error: "Medicines must be an array of at most 100 items." });
     }
     const result = await categorizeMedicinesServer(medicines || []);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+// Auto-allot formulation dosage form to unallotted medicines using Gemini AI
+app.post("/api/ai/allot-formulations", aiRateLimiter, requireFirebaseAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { medicines } = req.body;
+    if (!Array.isArray(medicines) || medicines.length > 100) {
+      return res.status(400).json({ error: "Medicines must be an array of at most 100 items." });
+    }
+    const result = await autoAllotFormulationsServer(medicines || []);
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message || String(error) });

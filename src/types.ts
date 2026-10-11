@@ -7,7 +7,33 @@ export interface MedicineHistory {
   details: string;
 }
 
-export type MedicineForm = 'tablet' | 'capsule' | 'syrup' | 'ampule' | 'powder' | 'tape' | 'liquid' | 'other';
+export type MedicineForm = 
+  | 'tablet' 
+  | 'capsule' 
+  | 'syrup' 
+  | 'drops' 
+  | 'cream' 
+  | 'lotion' 
+  | 'soap' 
+  | 'ointment' 
+  | 'gel' 
+  | 'spray' 
+  | 'inhaler' 
+  | 'injection' 
+  | 'ampule' 
+  | 'powder' 
+  | 'sachet' 
+  | 'suspension' 
+  | 'tape' 
+  | 'liquid' 
+  | 'other';
+
+export interface AllottedFormulationResult {
+  id: string;
+  form: MedicineForm;
+  confidence?: number;
+  explanation?: string;
+}
 
 export interface Medicine {
   id: string;

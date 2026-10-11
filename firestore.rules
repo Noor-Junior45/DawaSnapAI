@@ -56,7 +56,7 @@ service cloud.firestore {
              (!('quantity' in data) || (data.quantity is number && data.quantity >= 0)) &&
              (!('isDeleted' in data) || data.isDeleted is bool) &&
              (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is number) &&
-             (!('form' in data) || data.form == null || (data.form in ['tablet', 'capsule', 'syrup', 'ampule', 'powder', 'tape', 'liquid', 'other'])) &&
+             (!('form' in data) || data.form == null || (data.form in ['tablet', 'capsule', 'syrup', 'drops', 'cream', 'lotion', 'soap', 'ointment', 'gel', 'spray', 'inhaler', 'injection', 'ampule', 'powder', 'sachet', 'suspension', 'tape', 'liquid', 'other'])) &&
              (!('schedule' in data) || data.schedule == null || (data.schedule is string && data.schedule.size() < 1000)) &&
              (!('liked' in data) || data.liked is bool) &&
              (!('category' in data) || data.category == null || (data.category is string && data.category.size() < 250)) &&

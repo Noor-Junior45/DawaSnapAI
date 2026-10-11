@@ -28,8 +28,11 @@ interface MedicineAddPageProps {
 }
 
 const FORM_OPTIONS: MedicineForm[] = [
-  'tablet', 'capsule', 'syrup', 'ampule', 
-  'powder', 'tape', 'liquid', 'other'
+  'tablet', 'capsule', 'syrup', 'drops',
+  'cream', 'lotion', 'soap', 'ointment',
+  'gel', 'spray', 'inhaler', 'injection',
+  'ampule', 'powder', 'sachet', 'suspension',
+  'tape', 'liquid', 'other'
 ];
 
 const SCHEDULE_PRESETS = [
@@ -100,14 +103,18 @@ export const MedicineAddPage: React.FC<MedicineAddPageProps> = ({
           ? item.categories
           : (item.category ? item.category.split(/[,/&]/).map(s => s.trim()).filter(Boolean) : []);
         
-        if (cats.length > 0) {
+        if (cats.length > 0 || item.form) {
           setFormData(prev => ({
             ...prev,
-            categories: cats,
-            category: cats.join(', '),
-            tags: Array.from(new Set([...(prev.tags || []), ...cats.filter(c => c !== 'Other')]))
+            ...(cats.length > 0 ? {
+              categories: cats,
+              category: cats.join(', '),
+              tags: Array.from(new Set([...(prev.tags || []), ...cats.filter(c => c !== 'Other')]))
+            } : {}),
+            ...(item.form ? { form: item.form } : {})
           }));
-          setGeminiNotice(`Categories set to "${cats.join(', ')}" by Gemini AI!`);
+          const formLabel = item.form ? ` Formulation: "${item.form}".` : '';
+          setGeminiNotice(`Auto-allotted by Dr Jack! Category: "${cats.join(', ')}".${formLabel}`);
           setTimeout(() => setGeminiNotice(null), 4000);
         }
       }
@@ -403,7 +410,7 @@ export const MedicineAddPage: React.FC<MedicineAddPageProps> = ({
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-900">
               Medicine Form
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
               {FORM_OPTIONS.map((formKey, fIdx) => {
                 const isSelected = formData.form === formKey;
                 return (
