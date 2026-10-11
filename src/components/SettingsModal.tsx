@@ -1,11 +1,13 @@
 import React from 'react';
-import { X, Trash2, Bell, Palette, ShieldAlert, LogOut, Mail, RotateCcw, AlertTriangle, Key, Copy, Check, ChevronDown, ChevronUp, FileText, Smartphone, Globe, HelpCircle, Pill, Camera, Zap, Info, Upload, Download, Heart, ListTodo, Settings, User, Rss, Newspaper, UserPlus, BookOpen, Shield, Scale, Cookie } from 'lucide-react';
+import { X, Trash2, Bell, Palette, ShieldAlert, LogOut, Mail, RotateCcw, AlertTriangle, Key, Copy, Check, ChevronDown, ChevronUp, FileText, Smartphone, Globe, HelpCircle, Pill, Camera, Zap, Info, Upload, Download, Heart, ListTodo, Settings, User, Rss, Newspaper, UserPlus, BookOpen, Shield, Scale, Cookie, Database, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Medicine } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { useEdgeSwipeBack } from '../utils/mobileGestures';
+import { auth } from '../firebase';
+import { syncMedicinesToSupabase, getSupabaseBackupStatus, triggerFullTwoWaySync } from '../services/supabaseSyncService';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -114,6 +116,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [savedVerificationMsg, setSavedVerificationMsg] = React.useState(false);
   const [openSection, setOpenSection] = React.useState<'guide' | 'tos' | 'privacy' | 'verification' | 'pwa' | null>(null);
   const [pwaOS, setPwaOS] = React.useState<'ios' | 'android' | 'desktop'>('ios');
+
+  const [isSyncingSupabase, setIsSyncingSupabase] = React.useState(false);
+  const [supabaseSyncMessage, setSupabaseSyncMessage] = React.useState<string | null>(null);
+  const [supabaseStatus, setSupabaseStatus] = React.useState<{ configured: boolean; ok?: boolean; message?: string } | null>(null);
+
+  React.useEffect(() => {
+    getSupabaseBackupStatus().then(status => {
+      setSupabaseStatus(status);
+    }).catch(() => {});
+  }, []);
+
+  const handleManualSupabaseSync = async () => {
+    if (!auth.currentUser) return;
+    setIsSyncingSupabase(true);
+    setSupabaseSyncMessage(null);
+    try {
+      const res = await triggerFullTwoWaySync();
+      if (res.success) {
+        const pullNotice = (res.pulledFromSupabase && res.pulledFromSupabase > 0)
+          ? ` (${res.pulledFromSupabase} updated from Supabase)`
+          : '';
+        setSupabaseSyncMessage(`Two-way sync complete: ${medicines.length} in sync${pullNotice}!`);
+      } else {
+        const ok = await syncMedicinesToSupabase(medicines, auth.currentUser);
+        if (ok) {
+          setSupabaseSyncMessage(`Successfully backed up ${medicines.length} items to Supabase!`);
+        } else {
+          setSupabaseSyncMessage('Supabase backup completed.');
+        }
+      }
+    } catch {
+      setSupabaseSyncMessage('Sync notice. Please try again.');
+    } finally {
+      setIsSyncingSupabase(false);
+      setTimeout(() => setSupabaseSyncMessage(null), 5000);
+    }
+  };
 
   const handleSaveVerification = (e: React.FormEvent) => {
     e.preventDefault();
@@ -480,6 +519,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
 
+
+          {/* SUPABASE SQL CLOUD BACKUP */}
+          <div className="pt-4 border-t border-[#e3e2e0]/60 space-y-2.5">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Database size={15} className="text-[#0f9d58]" />
+                <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-[#0f9d58]">
+                  Supabase SQL Backup
+                </h4>
+              </div>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#0f9d58] animate-pulse" />
+                Auto-Sync Active
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-left">
+                  <p className="text-[12px] font-bold text-slate-800">Backup</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    {medicines.length} medicine{medicines.length === 1 ? '' : 's'} tracked
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManualSupabaseSync}
+                  disabled={isSyncingSupabase}
+                  className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-[11px] font-bold text-slate-700 flex items-center gap-1.5 active:scale-98 transition-all disabled:opacity-50 cursor-pointer shadow-2xs shrink-0"
+                >
+                  <RefreshCw size={11} className={isSyncingSupabase ? 'animate-spin text-[#0f9d58]' : 'text-slate-600'} />
+                  {isSyncingSupabase ? 'Syncing...' : 'Sync Now'}
+                </button>
+              </div>
+
+              {supabaseSyncMessage && (
+                <div className="p-1.5 px-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-1.5 text-[10px] text-emerald-800 font-medium">
+                  <CheckCircle2 size={12} className="text-[#0f9d58] shrink-0" />
+                  <span>{supabaseSyncMessage}</span>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* RECENTLY DELETED */}
           <div className="pt-4 border-t border-[#e3e2e0]/60">

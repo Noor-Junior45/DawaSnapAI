@@ -59,6 +59,13 @@ import { initNativeNotifications, scheduleNativeMedicineAlerts } from './service
 import { showBannerAd, hideBannerAd, onBannerHeightChange } from './services/admobService';
 import { useEdgeSwipeBack, usePullToRefresh } from './utils/mobileGestures';
 import { getApiUrl } from './utils/apiConfig';
+import { 
+  triggerDebouncedMedicinesSync, 
+  syncSingleMedicineToSupabase, 
+  syncConfigToSupabase, 
+  deleteMedicinesBatchFromSupabase,
+  deleteMedicineFromSupabase 
+} from './services/supabaseSyncService';
 
 type PublicPageType = 'guide' | 'privacy' | 'terms' | 'delete-account' | 'recently-deleted' | null;
 
@@ -554,6 +561,10 @@ export default function App() {
       // Deduplicate by ID to prevent React "duplicate key" warnings during sync lag or accidental duplicates
       const uniqueMeds = Array.from(new Map(medsData.map(m => [m.id, m])).values());
       setMedicines(uniqueMeds);
+      // Automatically sync all medicine updates to Supabase PostgreSQL backup via Render server
+      if (user) {
+        triggerDebouncedMedicinesSync(uniqueMeds, user);
+      }
     }, (error) => {
       console.warn('medicines snapshot notice (offline/reconnecting):', error);
     });
@@ -1328,6 +1339,7 @@ export default function App() {
         });
         await batch.commit();
       }
+      deleteMedicinesBatchFromSupabase(ids, user).catch(() => {});
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'medicines');
     }
@@ -1593,6 +1605,7 @@ export default function App() {
     if (!user) return;
     try {
       await setDoc(doc(db, 'userConfigs', user.uid), updates, { merge: true });
+      syncConfigToSupabase({ ...updates, userId: user.uid }, user).catch(() => {});
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'userConfigs');
     }
@@ -1842,6 +1855,9 @@ export default function App() {
 
       // Clean up local image storage
       await localImageStorage.deleteImage(id);
+
+      // Clean up Supabase backup
+      deleteMedicineFromSupabase(id, user).catch(() => {});
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'medicines');
     }

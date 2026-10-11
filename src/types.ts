@@ -43,6 +43,7 @@ export interface Medicine {
   usageInstructions: string;
   schedule?: string; // New field for medication schedule
   createdAt: number;
+  updatedAt?: number;
   capturedImage?: string; // Keep for backward compatibility or temporary storage
   capturedImageBack?: string; // Optional back side photo for dual-sided packaging
   imageUrl?: string; // New field for Firebase Storage URL

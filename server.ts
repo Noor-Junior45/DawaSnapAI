@@ -28,6 +28,24 @@ import {
   requireFirebaseAuth, 
   type AuthenticatedRequest 
 } from "./server/firebaseAdmin.ts";
+import {
+  testSupabaseConnection,
+  backupMedicinesBatchToSupabase,
+  backupMedicineToSupabase,
+  backupUserConfigToSupabase,
+  deleteMedicineFromSupabase,
+  deleteMedicinesBatchFromSupabase,
+  backupMedicineHistoryToSupabase,
+  deleteUserAllDataFromSupabase,
+  isSupabaseConfigured
+} from "./server/supabaseBackup.ts";
+import {
+  startScheduledTwoWaySync,
+  runTwoWaySync,
+  pullSupabaseToFirebase,
+  pushFirebaseToSupabase,
+  getLastSyncTime
+} from "./server/twoWaySync.ts";
 
 // Initialize Firebase Admin on startup
 initFirebaseAdmin();
@@ -564,6 +582,7 @@ app.post("/api/user/purge-data", requireFirebaseAuth, async (req: AuthenticatedR
   try {
     const userId = req.userId!; // Bound to verified token - cannot purge another user
     await purgeUserServerData(userId);
+    await deleteUserAllDataFromSupabase(userId);
     res.json({ success: true, purgedUserId: userId });
   } catch (error: any) {
     console.error("Error purging user server data:", error);
@@ -601,6 +620,152 @@ app.post("/api/notifications/send-test", requireFirebaseAuth, async (req: Authen
   } catch (error: any) {
     res.status(500).json({ error: error.message || String(error) });
   }
+});
+
+// ============================================================
+// SUPABASE POSTGRESQL BACKUP ENDPOINTS
+// ============================================================
+app.get("/api/backup/supabase/status", async (req, res) => {
+  try {
+    const configured = isSupabaseConfigured();
+    if (!configured) {
+      return res.json({
+        configured: false,
+        message: "Supabase environment variables (SUPABASE_URL and SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY) are not set in server environment.",
+      });
+    }
+    const testResult = await testSupabaseConnection();
+    res.json({
+      configured: true,
+      ...testResult,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
+app.post("/api/backup/supabase/sync-medicines", requireFirebaseAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { medicines } = req.body;
+    if (!Array.isArray(medicines)) {
+      return res.status(400).json({ error: "Medicines must be an array." });
+    }
+    const userId = req.userId;
+    // Ensure all synced medicines are attributed to the authenticated user
+    const userMeds = medicines
+      .filter(m => m && (!m.userId || m.userId === userId))
+      .map(m => ({ ...m, userId: m.userId || userId }));
+
+    const result = await backupMedicinesBatchToSupabase(userMeds);
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+app.post("/api/backup/supabase/sync-medicine", requireFirebaseAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { medicine } = req.body;
+    if (!medicine || !medicine.id) {
+      return res.status(400).json({ error: "Valid medicine object with id is required." });
+    }
+    medicine.userId = req.userId;
+    const success = await backupMedicineToSupabase(medicine);
+    res.json({ success });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+app.post("/api/backup/supabase/delete-medicine", requireFirebaseAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { medicineId } = req.body;
+    if (!medicineId) {
+      return res.status(400).json({ error: "medicineId is required." });
+    }
+    const success = await deleteMedicineFromSupabase(medicineId, req.userId);
+    res.json({ success });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+app.post("/api/backup/supabase/delete-medicines-batch", requireFirebaseAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { medicineIds } = req.body;
+    if (!Array.isArray(medicineIds) || medicineIds.length === 0) {
+      return res.status(400).json({ error: "medicineIds array is required." });
+    }
+    const success = await deleteMedicinesBatchFromSupabase(medicineIds, req.userId);
+    res.json({ success });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+app.post("/api/backup/supabase/sync-config", requireFirebaseAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { config } = req.body;
+    if (!config || typeof config !== 'object') {
+      return res.status(400).json({ error: "Config object is required." });
+    }
+    config.userId = req.userId;
+    const success = await backupUserConfigToSupabase(config);
+    res.json({ success });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+app.post("/api/backup/supabase/sync-history", requireFirebaseAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { history } = req.body;
+    if (!history) {
+      return res.status(400).json({ error: "history object is required." });
+    }
+    history.userId = req.userId;
+    const success = await backupMedicineHistoryToSupabase(history);
+    res.json({ success });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+// ============================================================
+// BIDIRECTIONAL TWO-WAY SYNC (Firebase ⇄ Supabase)
+// ============================================================
+app.post("/api/backup/two-way-sync", async (req, res) => {
+  try {
+    const result = await runTwoWaySync();
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+app.post("/api/backup/pull-from-supabase", async (req, res) => {
+  try {
+    const result = await pullSupabaseToFirebase();
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+app.post("/api/backup/push-to-supabase", async (req, res) => {
+  try {
+    const result = await pushFirebaseToSupabase();
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+app.get("/api/backup/two-way-status", (req, res) => {
+  res.json({
+    configured: isSupabaseConfigured(),
+    lastSyncTime: getLastSyncTime(),
+  });
 });
 
 // Endpoint to trigger a background expiry check (Strictly protected by CRON_SECRET)
@@ -650,6 +815,9 @@ async function setupViteAndListen() {
       console.log(`Server running on http://0.0.0.0:${PORT}`);
       // Launch automated expiry cron worker
       startExpiryCron();
+
+      // Launch automated hourly two-way sync (Firebase ⇄ Supabase)
+      startScheduledTwoWaySync();
 
       // Keep-alive self-ping for Render
       const renderBackendUrl = process.env.RENDER_EXTERNAL_URL || "https://dawalensai.onrender.com";
