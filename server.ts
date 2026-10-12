@@ -40,11 +40,9 @@ import {
   isSupabaseConfigured
 } from "./server/supabaseBackup.ts";
 import {
-  startScheduledTwoWaySync,
   runTwoWaySync,
   pullSupabaseToFirebase,
-  pushFirebaseToSupabase,
-  getLastSyncTime
+  pushFirestoreToSupabase
 } from "./server/twoWaySync.ts";
 
 // Initialize Firebase Admin on startup
@@ -631,7 +629,7 @@ app.get("/api/backup/supabase/status", async (req, res) => {
     if (!configured) {
       return res.json({
         configured: false,
-        message: "Supabase environment variables (SUPABASE_URL and SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY) are not set in server environment.",
+        message: "Supabase environment variables (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY) are not set in server environment.",
       });
     }
     const testResult = await testSupabaseConnection();
@@ -754,18 +752,28 @@ app.post("/api/backup/pull-from-supabase", async (req, res) => {
 
 app.post("/api/backup/push-to-supabase", async (req, res) => {
   try {
-    const result = await pushFirebaseToSupabase();
+    const result = await pushFirestoreToSupabase();
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message || String(error) });
   }
 });
 
-app.get("/api/backup/two-way-status", (req, res) => {
-  res.json({
-    configured: isSupabaseConfigured(),
-    lastSyncTime: getLastSyncTime(),
-  });
+// Authenticated cron sync endpoint for Render Cron Job (ONE-WAY Firestore -> Supabase)
+app.post("/api/cron/sync", async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  const providedHeader = req.headers['x-cron-secret'] || (typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+
+  if (!cronSecret || providedHeader !== cronSecret) {
+    return res.status(401).json({ error: "Unauthorized: A valid x-cron-secret or Authorization Bearer header matching CRON_SECRET is required." });
+  }
+
+  try {
+    const result = await runTwoWaySync();
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
 });
 
 // Endpoint to trigger a background expiry check (Strictly protected by CRON_SECRET)
@@ -815,9 +823,6 @@ async function setupViteAndListen() {
       console.log(`Server running on http://0.0.0.0:${PORT}`);
       // Launch automated expiry cron worker
       startExpiryCron();
-
-      // Launch automated hourly two-way sync (Firebase ⇄ Supabase)
-      startScheduledTwoWaySync();
 
       // Keep-alive self-ping for Render
       const renderBackendUrl = process.env.RENDER_EXTERNAL_URL || "https://dawalensai.onrender.com";

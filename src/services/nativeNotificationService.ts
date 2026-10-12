@@ -138,19 +138,21 @@ export async function initNativeNotifications(): Promise<boolean> {
               localStorage.setItem('dawasnap_fcm_token', token.value);
               localStorage.setItem('dawalens_fcm_token', token.value);
               
-              // Persist token to Firestore user_push_tokens collection
+              // Persist token to Firestore users/{uid}/pushTokens/{tokenId}
               try {
                 const { db, auth, doc, setDoc } = await import('../firebase');
-                const currentUserId = auth.currentUser?.uid || 'anonymous_device';
-                const tokenRef = doc(db, 'user_push_tokens', `${currentUserId}_${token.value.slice(-12)}`);
-                await setDoc(tokenRef, {
-                  userId: currentUserId,
-                  token: token.value,
-                  platform: 'android',
-                  appVersion: '1.1.6',
-                  updatedAt: new Date().toISOString(),
-                }, { merge: true });
-                console.log('[FCM] Successfully persisted Android push token to Firestore');
+                const currentUserId = auth.currentUser?.uid;
+                if (currentUserId) {
+                  const tokenId = `token_${token.value.slice(-16).replace(/[^a-zA-Z0-9]/g, '_')}`;
+                  const tokenRef = doc(db, 'users', currentUserId, 'pushTokens', tokenId);
+                  await setDoc(tokenRef, {
+                    token: token.value,
+                    platform: 'android',
+                    appVersion: '1.1.6',
+                    updatedAt: new Date().toISOString(),
+                  }, { merge: true });
+                  console.log('[FCM] Successfully persisted Android push token to users/{uid}/pushTokens');
+                }
               } catch (dbErr) {
                 console.warn('[FCM] Firestore token sync warning:', dbErr);
               }

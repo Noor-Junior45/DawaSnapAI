@@ -19,6 +19,7 @@ service cloud.firestore {
       return data.keys().hasAll(['userId', 'email']) &&
              data.keys().hasOnly(['userId', 'email', 'emailNotificationsEnabled', 'browserNotificationsEnabled', 'alertThreshold', 'accentColor', 'sortOrder', 'lowQuantityThreshold', 'theme']) &&
              data.userId == request.auth.uid &&
+             data.email == request.auth.token.email &&
              isValidEmail(data.email) &&
              (!('emailNotificationsEnabled' in data) || data.emailNotificationsEnabled is bool) &&
              (!('browserNotificationsEnabled' in data) || data.browserNotificationsEnabled is bool) &&
@@ -33,27 +34,33 @@ service cloud.firestore {
       return data.keys().hasAll(['id', 'name', 'userId']) &&
              data.keys().hasOnly([
                'id', 'name', 'dosage', 'expirationDate', 'userId', 'createdAt', 'updatedAt', 
-               'usageInstructions', 'imageUrl', 'capturedImage', 'taken', 'quantity', 
+               'usageInstructions', 'imageUrl', 'taken', 'quantity', 
                'isDeleted', 'deletedAt', 'form', 'schedule', 'liked', 'isEncrypted', 'ivMap', 
                'enableLowStockAlert', 'lowStockThreshold', 'enableEmailExpiryAlert', 'enableEmailLowStockAlert', 
                'category', 'categories', 'tags', 'notes', 'barcode', 'mfgDate', 'manufacturer', 
                'price', 'groupKey', 'totalQuantity', 'batchId', 'batchCount', 'batches', 
                'allBatches', 'activeBatches', 'expiredOrEmptyBatches', 'earliestExpiry', 
-               'dosageUnit', 'sideEffects', 'alertStage', 'lastEmailAlertStage', 'lastAlertSent', 
-               'serverProcessed', 'email'
+               'dosageUnit', 'sideEffects', 'email'
              ]) &&
              data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
              data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
              (!('dosage' in data) || (data.dosage is string && data.dosage.size() < 100)) &&
              (!('expirationDate' in data) || (data.expirationDate is string && data.expirationDate.size() < 50)) &&
              data.userId == request.auth.uid &&
+             (!('email' in data) || data.email == null || data.email == request.auth.token.email) &&
              (!('createdAt' in data) || data.createdAt is number || data.createdAt is timestamp) &&
              (!('updatedAt' in data) || data.updatedAt == null || data.updatedAt is number || data.updatedAt is timestamp) &&
              (!('usageInstructions' in data) || data.usageInstructions == null || (data.usageInstructions is string && data.usageInstructions.size() < 2000)) &&
              (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() < 2000)) &&
-             (!('capturedImage' in data) || data.capturedImage == null || (data.capturedImage is string && data.capturedImage.size() < 2000000)) &&
              (!('taken' in data) || data.taken is bool) &&
              (!('quantity' in data) || (data.quantity is number && data.quantity >= 0)) &&
+             (!('totalQuantity' in data) || data.totalQuantity == null || (data.totalQuantity is number && data.totalQuantity >= 0)) &&
+             (!('price' in data) || data.price == null || data.price is number || (data.price is string && data.price.size() <= 50)) &&
+             (!('batches' in data) || data.batches == null || (data.batches is list && data.batches.size() <= 100)) &&
+             (!('allBatches' in data) || data.allBatches == null || data.allBatches is list) &&
+             (!('activeBatches' in data) || data.activeBatches == null || data.activeBatches is list) &&
+             (!('expiredOrEmptyBatches' in data) || data.expiredOrEmptyBatches == null || data.expiredOrEmptyBatches is list) &&
+             (!('earliestExpiry' in data) || data.earliestExpiry == null || (data.earliestExpiry is string && data.earliestExpiry.size() <= 50)) &&
              (!('isDeleted' in data) || data.isDeleted is bool) &&
              (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is number) &&
              (!('form' in data) || data.form == null || (data.form in ['tablet', 'capsule', 'syrup', 'drops', 'cream', 'lotion', 'soap', 'ointment', 'gel', 'spray', 'inhaler', 'injection', 'ampule', 'powder', 'sachet', 'suspension', 'tape', 'liquid', 'other'])) &&
@@ -62,6 +69,15 @@ service cloud.firestore {
              (!('category' in data) || data.category == null || (data.category is string && data.category.size() < 250)) &&
              (!('categories' in data) || data.categories == null || (data.categories is list && data.categories.size() <= 30)) &&
              (!('tags' in data) || data.tags == null || (data.tags is list && data.tags.size() <= 30)) &&
+             (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 2000)) &&
+             (!('barcode' in data) || data.barcode == null || (data.barcode is string && data.barcode.size() <= 100)) &&
+             (!('mfgDate' in data) || data.mfgDate == null || (data.mfgDate is string && data.mfgDate.size() <= 50)) &&
+             (!('manufacturer' in data) || data.manufacturer == null || (data.manufacturer is string && data.manufacturer.size() <= 200)) &&
+             (!('groupKey' in data) || data.groupKey == null || (data.groupKey is string && data.groupKey.size() <= 200)) &&
+             (!('batchId' in data) || data.batchId == null || (data.batchId is string && data.batchId.size() <= 100)) &&
+             (!('batchCount' in data) || data.batchCount == null || (data.batchCount is number && data.batchCount >= 0)) &&
+             (!('dosageUnit' in data) || data.dosageUnit == null || (data.dosageUnit is string && data.dosageUnit.size() <= 50)) &&
+             (!('sideEffects' in data) || data.sideEffects == null || (data.sideEffects is string && data.sideEffects.size() <= 2000)) &&
              (!('enableLowStockAlert' in data) || data.enableLowStockAlert is bool) &&
              (!('lowStockThreshold' in data) || data.lowStockThreshold == null || (data.lowStockThreshold is number && data.lowStockThreshold >= 0)) &&
              (!('enableEmailExpiryAlert' in data) || data.enableEmailExpiryAlert is bool) &&
@@ -103,9 +119,28 @@ service cloud.firestore {
 
     function isValidMail(data) {
       return data.keys().hasAll(['to', 'message']) &&
+             data.keys().hasOnly(['to', 'message', 'timestamp']) &&
              data.to == request.auth.token.email &&
              isValidEmail(data.to) &&
-             data.message.keys().hasAll(['subject', 'text', 'html']);
+             data.message.keys().hasAll(['subject', 'html']) &&
+             data.message.keys().hasOnly(['subject', 'text', 'html']) &&
+             data.message.subject is string && data.message.subject.size() < 200 &&
+             data.message.html is string && data.message.html.size() < 20000 &&
+             (!('text' in data.message) || (data.message.text is string && data.message.text.size() < 20000));
+    }
+
+    function isValidSlmKnowledge(data, userId) {
+      return data.keys().hasAll(['id', 'userId', 'type', 'topic', 'content', 'source', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'userId', 'type', 'topic', 'content', 'source', 'queryPattern', 'createdAt', 'updatedAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.userId == userId && data.userId == request.auth.uid &&
+             data.type in ['user_profile', 'learned_task', 'allergy', 'chronic_condition', 'preference'] &&
+             data.topic is string && data.topic.size() > 0 && data.topic.size() < 500 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 10000 &&
+             data.source in ['slm_extracted', 'gemini_distilled'] &&
+             (!('queryPattern' in data) || (data.queryPattern is string && data.queryPattern.size() < 500)) &&
+             data.createdAt is number &&
+             data.updatedAt is number;
     }
 
     function isValidAiReport(data) {
@@ -119,32 +154,37 @@ service cloud.firestore {
              data.timestamp is number;
     }
 
+    // Mail collection for email notifications
     match /mail/{mailId} {
       allow read: if isAuthenticated() && (resource.data.to == request.auth.token.email || isAdmin());
-      allow create: if isAuthenticated() && isValidMail(request.resource.data);
+      allow create: if isAuthenticated() && request.auth.token.email_verified == true && isValidMail(request.resource.data);
       allow update, delete: if isAdmin();
     }
 
+    // Medicines collection
     match /medicines/{medicineId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && isValidMedicine(request.resource.data);
-      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || !('userId' in resource.data) || resource.data.userId == '' || isAdmin()) && isValidMedicine(request.resource.data);
+      allow create: if isAuthenticated() && isValidMedicine(request.resource.data) && request.resource.data.id == medicineId;
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin()) && isValidMedicine(request.resource.data) && request.resource.data.id == medicineId;
       allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
 
       match /history/{historyId} {
-        allow read: if isAuthenticated() && (!exists(/databases/$(database)/documents/medicines/$(medicineId)) || get(/databases/$(database)/documents/medicines/$(medicineId)).data.userId == request.auth.uid || isAdmin());
-        allow create: if isAuthenticated() && isValidMedicineHistory(request.resource.data) && request.resource.data.medicineId == medicineId;
-        allow update: if false; // History should be immutable
-        allow delete: if isAuthenticated() && (!exists(/databases/$(database)/documents/medicines/$(medicineId)) || get(/databases/$(database)/documents/medicines/$(medicineId)).data.userId == request.auth.uid || isAdmin());
+        allow read, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() && isValidMedicineHistory(request.resource.data) && request.resource.data.medicineId == medicineId && get(/databases/$(database)/documents/medicines/$(medicineId)).data.userId == request.auth.uid;
+        allow update: if false; // History is strictly immutable
       }
     }
 
+    // Single source of truth for user data and settings
     match /users/{userId} {
       match /settings/appSettings {
         allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-        allow create: if isAuthenticated() && request.auth.uid == userId && isValidUserConfig(request.resource.data);
-        allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidUserConfig(request.resource.data);
+        allow create, update: if isAuthenticated() && request.auth.uid == userId && isValidUserConfig(request.resource.data);
         allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      }
+
+      match /pushTokens/{tokenId} {
+        allow read, write, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       }
 
       match /chats/{sessionId} {
@@ -159,47 +199,34 @@ service cloud.firestore {
 
       match /slmKnowledge/{knowledgeId} {
         allow read, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-        allow create, update: if isAuthenticated() && request.auth.uid == userId;
+        allow create, update: if isAuthenticated() && request.auth.uid == userId && isValidSlmKnowledge(request.resource.data, userId);
       }
     }
 
-    match /userConfigs/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUserConfig(request.resource.data);
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidUserConfig(request.resource.data);
-      allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-    }
-
+    // Server-only internal collections: completely blocked from client SDKs (Server Admin SDK bypasses rules)
     match /server_chat_limits/{limitId} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
     match /medicine_cache/{name} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
     match /extraction_cache/{hash} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
     match /server_expiry_schedules/{scheduleId} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
     match /server_sent_expiry_alerts/{alertId} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
-    match /user_push_tokens/{tokenId} {
-      allow read, write: if true;
-    }
-
-    match /test/connection {
-      allow read: if true;
-    }
-
+    // AI diagnostic reports
     match /aiReports/{reportId} {
-      allow create: if isValidAiReport(request.resource.data);
+      allow create: if isAuthenticated() && isValidAiReport(request.resource.data);
       allow read, update, delete: if isAdmin();
     }
   }

@@ -1,19 +1,27 @@
-import { initializeApp } from 'firebase/app';
-import { initializeFirestore, doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getAdminApp } from './server/firebaseAdmin.ts';
 import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
 
-const app = initializeApp(firebaseConfig);
-const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-  experimentalAutoDetectLongPolling: false,
-}, firebaseConfig.firestoreDatabaseId);
+let cachedDb: Firestore | null = null;
+
+function getAdminDb(): Firestore {
+  if (cachedDb) return cachedDb;
+  const adminApp = getAdminApp();
+  cachedDb = getFirestore(adminApp, firebaseConfig.firestoreDatabaseId);
+  try {
+    cachedDb.settings({ ignoreUndefinedProperties: true });
+  } catch {
+    // Settings already applied
+  }
+  return cachedDb;
+}
 
 export async function getChatCount(userId: string, date: string): Promise<number> {
   try {
-    const docRef = doc(db, 'server_chat_limits', `${userId}_${date}`);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data().count || 0;
+    const db = getAdminDb();
+    const docSnap = await db.collection('server_chat_limits').doc(`${userId}_${date}`).get();
+    if (docSnap.exists) {
+      return docSnap.data()?.count || 0;
     }
   } catch (error) {
     console.error("Error in getChatCount:", error);
@@ -23,13 +31,14 @@ export async function getChatCount(userId: string, date: string): Promise<number
 
 export async function incrementChatCount(userId: string, date: string): Promise<void> {
   try {
-    const docRef = doc(db, 'server_chat_limits', `${userId}_${date}`);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      const currentCount = docSnap.data().count || 0;
-      await setDoc(docRef, { count: currentCount + 1, updated_at: new Date().toISOString() });
+    const db = getAdminDb();
+    const docRef = db.collection('server_chat_limits').doc(`${userId}_${date}`);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+      const currentCount = docSnap.data()?.count || 0;
+      await docRef.set({ count: currentCount + 1, updated_at: new Date().toISOString() }, { merge: true });
     } else {
-      await setDoc(docRef, { count: 1, updated_at: new Date().toISOString() });
+      await docRef.set({ count: 1, updated_at: new Date().toISOString() });
     }
   } catch (error) {
     console.error("Error in incrementChatCount:", error);
@@ -38,9 +47,9 @@ export async function incrementChatCount(userId: string, date: string): Promise<
 
 export async function getCachedMedicine(name: string): Promise<any> {
   try {
-    const docRef = doc(db, 'medicine_cache', name.toLowerCase().trim());
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
+    const db = getAdminDb();
+    const docSnap = await db.collection('medicine_cache').doc(name.toLowerCase().trim()).get();
+    if (docSnap.exists) {
       return docSnap.data();
     }
   } catch (error) {
@@ -57,8 +66,8 @@ export async function setCachedMedicine(
   form: string
 ): Promise<void> {
   try {
-    const docRef = doc(db, 'medicine_cache', name.toLowerCase().trim());
-    await setDoc(docRef, {
+    const db = getAdminDb();
+    await db.collection('medicine_cache').doc(name.toLowerCase().trim()).set({
       name,
       dosage,
       instructions,
@@ -73,9 +82,9 @@ export async function setCachedMedicine(
 
 export async function getExtractionData(hash: string): Promise<any> {
   try {
-    const docRef = doc(db, 'extraction_cache', hash);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
+    const db = getAdminDb();
+    const docSnap = await db.collection('extraction_cache').doc(hash).get();
+    if (docSnap.exists) {
       return docSnap.data();
     }
   } catch (error) {
@@ -86,8 +95,8 @@ export async function getExtractionData(hash: string): Promise<any> {
 
 export async function setExtractionData(hash: string, data: string): Promise<void> {
   try {
-    const docRef = doc(db, 'extraction_cache', hash);
-    await setDoc(docRef, {
+    const db = getAdminDb();
+    await db.collection('extraction_cache').doc(hash).set({
       data,
       updated_at: new Date().toISOString()
     });
@@ -98,11 +107,8 @@ export async function setExtractionData(hash: string, data: string): Promise<voi
 
 export async function getUserMedicines(userId: string): Promise<any[]> {
   try {
-    const q = query(
-      collection(db, 'medicines'),
-      where('userId', '==', userId)
-    );
-    const snap = await getDocs(q);
+    const db = getAdminDb();
+    const snap = await db.collection('medicines').where('userId', '==', userId).get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error("Error in getUserMedicines:", error);

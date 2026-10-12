@@ -1,23 +1,22 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
-  initializeFirestore, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  deleteDoc,
-  collection, 
-  getDocs 
-} from 'firebase/firestore';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
 import { sendEmailDirectServer, getExpiryEmailHTMLServer, type ExpiryStage } from "./emailTemplates.ts";
 import { getAdminApp, hasServiceAccountConfigured } from "./firebaseAdmin.ts";
 import { getMessaging } from 'firebase-admin/messaging';
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-  experimentalAutoDetectLongPolling: false,
-}, firebaseConfig.firestoreDatabaseId);
+let cachedDb: Firestore | null = null;
+
+function getAdminDb(): Firestore {
+  if (cachedDb) return cachedDb;
+  const adminApp = getAdminApp();
+  cachedDb = getFirestore(adminApp, firebaseConfig.firestoreDatabaseId);
+  try {
+    cachedDb.settings({ ignoreUndefinedProperties: true });
+  } catch {
+    // Settings already applied
+  }
+  return cachedDb;
+}
 
 export interface ActiveMedicineItem {
   id: string;
@@ -58,9 +57,9 @@ export async function registerPushToken(
   userPushTokens.get(userId)!.add(token);
 
   try {
-    const tokenDoc = doc(db, 'user_push_tokens', `${userId}_${token.slice(-12)}`);
-    await setDoc(tokenDoc, {
-      userId,
+    const db = getAdminDb();
+    const tokenId = `token_${token.slice(-16).replace(/[^a-zA-Z0-9]/g, '_')}`;
+    await db.collection('users').doc(userId).collection('pushTokens').doc(tokenId).set({
       token,
       platform,
       updatedAt: new Date().toISOString()
@@ -83,10 +82,11 @@ export async function sendPushNotificationToUser(
   const tokens = new Set<string>(userPushTokens.get(userId) || []);
 
   try {
-    const snap = await getDocs(collection(db, 'user_push_tokens'));
+    const db = getAdminDb();
+    const snap = await db.collection('users').doc(userId).collection('pushTokens').get();
     snap.forEach(d => {
       const dData = d.data();
-      if (dData.userId === userId && dData.token) {
+      if (dData.token) {
         tokens.add(dData.token);
       }
     });
@@ -139,11 +139,11 @@ export async function sendPushNotificationToUser(
       }
     });
 
-    console.log(`[FCM HTTP v1 SUCCESS] Sent ${response.successCount}/${tokenArray.length} notifications to user ${userId}`);
+    console.log(`[FCM HTTP v1] Dispatched push to user ${userId}: ${response.successCount} succeeded, ${response.failureCount} failed.`);
     return { sent: response.successCount };
-  } catch (e: any) {
-    console.error('[FCM HTTP v1 ERROR]:', e);
-    return { sent: 0, error: e?.message || String(e) };
+  } catch (err: any) {
+    console.error(`[FCM HTTP v1 ERROR] Push dispatch exception:`, err);
+    return { sent: 0, error: err.message || String(err) };
   }
 }
 
@@ -168,8 +168,8 @@ export async function registerUserExpirySchedule(
   memorySchedules.set(userId, schedule);
 
   try {
-    const docRef = doc(db, 'server_expiry_schedules', userId);
-    await setDoc(docRef, schedule);
+    const db = getAdminDb();
+    await db.collection('server_expiry_schedules').doc(userId).set(schedule);
     console.log(`[EXPIRY SYNC] Successfully registered ${schedule.medicines.length} medicine(s) for user ${email}`);
   } catch (err) {
     console.warn(`[EXPIRY SYNC WARNING] Could not persist schedule to Firestore, kept in memory:`, err);
@@ -184,16 +184,12 @@ export async function registerUserExpirySchedule(
  * - Stage 2 (7_DAYS): Exactly 7 days before expiry (1 Week Warning)
  * - Stage 3 (EXPIRED): On or within 14 days after expiration date (Safe Disposal Advisory)
  * 
- * Crucial Safeguards:
- * 1. Runs completely in the backend on the server, even when all user apps are closed.
- * 2. Checks and reserves in `server_sent_expiry_alerts` in Firestore BEFORE sending any email.
- *    If an alert was already sent or is in-flight for that medicine at that stage, it is SKIPPED.
- *    Every email is sent strictly ONCE per stage, preventing duplicate emails across multiple devices.
+ * Each stage for a given medicine is dispatched at most ONCE per user.
  */
-export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sent: number; skipped?: boolean }> {
+export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sent: number }> {
   if (isCheckRunning) {
-    console.log("[BACKGROUND EXPIRY CRON] Another check is already in progress. Skipping concurrent run.");
-    return { checked: 0, sent: 0, skipped: true };
+    console.log("[BACKGROUND EXPIRY CRON] Another check is already in progress, skipping.");
+    return { checked: 0, sent: 0 };
   }
 
   isCheckRunning = true;
@@ -209,9 +205,10 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
       schedulesToProcess.set(uid, sched);
     }
 
-    // Load from Firestore server_expiry_schedules
+    // Load from Firestore server_expiry_schedules using Admin SDK
     try {
-      const snap = await getDocs(collection(db, 'server_expiry_schedules'));
+      const db = getAdminDb();
+      const snap = await db.collection('server_expiry_schedules').get();
       snap.forEach(docSnap => {
         const data = docSnap.data() as UserExpirySchedule;
         if (data && data.userId && data.email) {
@@ -229,6 +226,8 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
 
     const now = new Date();
     now.setHours(0, 0, 0, 0);
+
+    const db = getAdminDb();
 
     for (const schedule of schedulesToProcess.values()) {
       if (!schedule.emailNotificationsEnabled || !schedule.email || !schedule.medicines) {
@@ -277,11 +276,11 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
         }
 
         try {
-          // Check if this alert was already sent in Firestore
-          const alertRef = doc(db, 'server_sent_expiry_alerts', alertDocId);
-          const alertSnap = await getDoc(alertRef);
+          // Check if this alert was already sent in Firestore using Admin SDK
+          const alertRef = db.collection('server_sent_expiry_alerts').doc(alertDocId);
+          const alertSnap = await alertRef.get();
 
-          if (alertSnap.exists()) {
+          if (alertSnap.exists) {
             // Already sent! Skip to guarantee only one email is ever sent
             inFlightAlerts.add(alertDocId);
             continue;
@@ -291,7 +290,7 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
           inFlightAlerts.add(alertDocId);
 
           // Atomic reservation in Firestore: write PENDING record immediately to prevent race conditions
-          await setDoc(alertRef, {
+          await alertRef.set({
             userId: schedule.userId,
             medId: m.id,
             medName: m.name,
@@ -343,7 +342,7 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
           }
 
           // Finalize permanently sent in Firestore
-          await setDoc(alertRef, {
+          await alertRef.set({
             status: 'SENT',
             sentAt: new Date().toISOString()
           }, { merge: true });
@@ -395,22 +394,19 @@ export async function purgeUserServerData(userId: string): Promise<void> {
   userPushTokens.delete(userId);
 
   try {
-    const schedRef = doc(db, 'server_expiry_schedules', userId);
-    await deleteDoc(schedRef);
+    const db = getAdminDb();
+    await db.collection('server_expiry_schedules').doc(userId).delete();
   } catch (err) {
     console.warn(`[PURGE] Notice when deleting server_expiry_schedules doc for ${userId}:`, err);
   }
 
   try {
-    const snap = await getDocs(collection(db, 'user_push_tokens'));
-    const toDelete: Promise<any>[] = [];
-    snap.forEach(d => {
-      if (d.data().userId === userId) {
-        toDelete.push(deleteDoc(d.ref));
-      }
-    });
-    await Promise.all(toDelete);
+    const db = getAdminDb();
+    const snap = await db.collection('users').doc(userId).collection('pushTokens').get();
+    const batch = db.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
   } catch (err) {
-    console.warn(`[PURGE] Notice when deleting user_push_tokens for ${userId}:`, err);
+    console.warn(`[PURGE] Notice when deleting pushTokens for ${userId}:`, err);
   }
 }

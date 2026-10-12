@@ -19,7 +19,7 @@ import {
 } from './services/geminiService';
 import { 
   auth, db, signOut, onAuthStateChanged, 
-  collection, doc, setDoc, deleteDoc, updateDoc, writeBatch, onSnapshot, query, where, orderBy, getDocs, User,
+  collection, doc, setDoc, deleteDoc, updateDoc, writeBatch, onSnapshot, query, where, orderBy, getDocs, getDoc, User,
   handleFirestoreError, OperationType, deleteField, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail,
   serverTimestamp, reauthenticateWithPopup, reauthenticateWithCredential, GoogleAuthProvider, getAuthHeader
 } from './firebase';
@@ -507,8 +507,9 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const configRef = doc(db, 'userConfigs', user.uid);
-    const unsubscribe = onSnapshot(configRef, (snapshot) => {
+    const configRef = doc(db, 'users', user.uid, 'settings', 'appSettings');
+    const legacyConfigRef = doc(db, 'userConfigs', user.uid);
+    const unsubscribe = onSnapshot(configRef, async (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.alertThreshold) setAlertThreshold(data.alertThreshold);
@@ -519,25 +520,36 @@ export default function App() {
         if (data.sortOrder) setSortOrder(data.sortOrder);
         if (data.theme) setTheme(data.theme);
       } else {
-        // Initialize default config
+        // Check if legacy userConfigs doc exists to migrate seamlessly
+        let legacyData: any = null;
+        try {
+          const legSnap = await getDoc(legacyConfigRef);
+          if (legSnap.exists()) {
+            legacyData = legSnap.data();
+          }
+        } catch {
+          // Ignore legacy read error
+        }
+
         if (user.email) {
-          setDoc(configRef, {
+          const initialConfig = {
             userId: user.uid,
             email: user.email,
-            emailNotificationsEnabled: false,
-            browserNotificationsEnabled: false,
-            alertThreshold: 90,
-            lowQuantityThreshold: 5,
-            accentColor: '#f97316',
-            sortOrder: 'default',
-            theme: 'system'
-          }).catch(err => {
-            console.warn('Initial userConfig creation sync deferred:', err);
+            emailNotificationsEnabled: legacyData?.emailNotificationsEnabled ?? false,
+            browserNotificationsEnabled: legacyData?.browserNotificationsEnabled ?? false,
+            alertThreshold: legacyData?.alertThreshold ?? 90,
+            lowQuantityThreshold: legacyData?.lowQuantityThreshold ?? 5,
+            accentColor: legacyData?.accentColor ?? '#f97316',
+            sortOrder: legacyData?.sortOrder ?? 'default',
+            theme: legacyData?.theme ?? 'system'
+          };
+          setDoc(configRef, initialConfig).catch(err => {
+            console.warn('Initial appSettings creation deferred:', err);
           });
         }
       }
     }, (error) => {
-      console.warn('userConfigs snapshot notice (offline/reconnecting):', error);
+      console.warn('appSettings snapshot notice (offline/reconnecting):', error);
     });
 
     return () => unsubscribe();
@@ -1000,9 +1012,6 @@ export default function App() {
       if (currentDetailsMedicine.liked !== undefined) updateData.liked = currentDetailsMedicine.liked;
       if (currentDetailsMedicine.isDeleted !== undefined) updateData.isDeleted = currentDetailsMedicine.isDeleted;
       if (currentDetailsMedicine.deletedAt !== undefined) updateData.deletedAt = currentDetailsMedicine.deletedAt;
-      if (currentDetailsMedicine.capturedImage && !capturedImage) {
-        updateData.capturedImage = currentDetailsMedicine.capturedImage;
-      }
 
       // Ensure no undefined values exist
       Object.keys(updateData).forEach(key => {
@@ -1604,10 +1613,12 @@ export default function App() {
   const handleUpdateConfig = async (updates: any) => {
     if (!user) return;
     try {
-      await setDoc(doc(db, 'userConfigs', user.uid), updates, { merge: true });
-      syncConfigToSupabase({ ...updates, userId: user.uid }, user).catch(() => {});
+      const configRef = doc(db, 'users', user.uid, 'settings', 'appSettings');
+      const payload = { ...updates, userId: user.uid, email: user.email };
+      await setDoc(configRef, payload, { merge: true });
+      syncConfigToSupabase(payload, user).catch(() => {});
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'userConfigs');
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/settings/appSettings`);
     }
   };
 
@@ -2142,10 +2153,9 @@ export default function App() {
       }
     }
 
-    // 3b. User configs & app settings
-    batch.delete(doc(db, 'userConfigs', currentUserId));
+    // 3b. User app settings
     batch.delete(doc(db, 'users', currentUserId, 'settings', 'appSettings'));
-    opCount += 2;
+    opCount += 1;
 
     // 3c. User chats and message subcollections
     try {

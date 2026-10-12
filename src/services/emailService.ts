@@ -119,15 +119,11 @@ export async function sendEmailAlert(params: EmailParams): Promise<{ success: bo
         await addDoc(collection(db, 'mail'), {
           to: params.to,
           message: {
-            subject: params.subject,
-            text: params.text,
-            html: params.html
+            subject: (params.subject || 'DawaSnap Notification').slice(0, 190),
+            text: (params.text || '').slice(0, 19000),
+            html: (params.html || '<p></p>').slice(0, 19000)
           },
-          timestamp: serverTimestamp(),
-          status: {
-            state: data.simulated ? 'SIMULATED' : 'SUCCESS',
-            updatedAt: Date.now()
-          }
+          timestamp: serverTimestamp()
         });
       } catch (firestoreErr) {
         console.warn('[EMAIL SERVICE] Optional Firestore backup copy skipped:', firestoreErr);

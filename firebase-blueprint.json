@@ -8,32 +8,52 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "dosage": { "type": "string" },
-        "expirationDate": { "type": "string", "format": "date" },
+        "expirationDate": { "type": "string" },
         "usageInstructions": { "type": "string" },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" },
         "userId": { "type": "string" },
-        "capturedImage": { "type": "string" },
         "imageUrl": { "type": "string" },
         "quantity": { "type": "number" },
         "taken": { "type": "boolean" },
         "isDeleted": { "type": "boolean" },
-        "deletedAt": { "type": ["number", "null"] },
+        "deletedAt": { "type": "number" },
         "form": { "type": "string", "enum": ["tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "other"] },
         "schedule": { "type": "string" },
         "liked": { "type": "boolean" },
         "category": { "type": "string" },
+        "categories": { "type": "array", "items": { "type": "string" } },
         "tags": { "type": "array", "items": { "type": "string" } },
         "enableLowStockAlert": { "type": "boolean" },
         "lowStockThreshold": { "type": "number" },
+        "enableEmailExpiryAlert": { "type": "boolean" },
+        "enableEmailLowStockAlert": { "type": "boolean" },
         "isEncrypted": { "type": "boolean" },
-        "ivMap": { "type": "object" }
+        "ivMap": { "type": "object" },
+        "notes": { "type": "string" },
+        "barcode": { "type": "string" },
+        "mfgDate": { "type": "string" },
+        "manufacturer": { "type": "string" },
+        "price": { "type": "number" },
+        "groupKey": { "type": "string" },
+        "totalQuantity": { "type": "number" },
+        "batchId": { "type": "string" },
+        "batchCount": { "type": "number" },
+        "batches": { "type": "array", "items": { "type": "object" } },
+        "allBatches": { "type": "array", "items": { "type": "object" } },
+        "activeBatches": { "type": "array", "items": { "type": "object" } },
+        "expiredOrEmptyBatches": { "type": "array", "items": { "type": "object" } },
+        "earliestExpiry": { "type": "string" },
+        "dosageUnit": { "type": "string" },
+        "sideEffects": { "type": "string" },
+        "email": { "type": "string", "format": "email" }
       },
-      "required": ["id", "name", "dosage", "expirationDate", "userId"]
+      "required": ["id", "name", "userId"],
+      "additionalProperties": false
     },
     "MedicineHistory": {
       "title": "MedicineHistory",
-      "description": "A log of changes made to a medicine",
+      "description": "An immutable log of actions performed on a medicine",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -43,11 +63,12 @@
         "actionType": { "type": "string", "enum": ["CREATE", "EDIT", "MARK_TAKEN", "MARK_NOT_TAKEN", "DELETE"] },
         "details": { "type": "string" }
       },
-      "required": ["id", "medicineId", "userId", "timestamp", "actionType", "details"]
+      "required": ["id", "medicineId", "userId", "timestamp", "actionType", "details"],
+      "additionalProperties": false
     },
     "UserConfig": {
       "title": "UserConfig",
-      "description": "User-specific settings and preferences",
+      "description": "User preferences and notification configurations",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
@@ -60,11 +81,25 @@
         "lowQuantityThreshold": { "type": "number" },
         "theme": { "type": "string", "enum": ["system", "light", "dark"] }
       },
-      "required": ["userId", "email"]
+      "required": ["userId", "email"],
+      "additionalProperties": false
+    },
+    "PushToken": {
+      "title": "PushToken",
+      "description": "FCM device registration token for push notifications",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "platform": { "type": "string" },
+        "appVersion": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["token"],
+      "additionalProperties": false
     },
     "ChatSession": {
       "title": "ChatSession",
-      "description": "An AI chat conversation session",
+      "description": "An AI pharmacist chat session",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -72,26 +107,28 @@
         "title": { "type": "string" },
         "createdAt": { "type": "number" },
         "lastMessageAt": { "type": "number" },
-        "provider": { "type": "string", "enum": ["gemini"] }
+        "provider": { "type": "string", "enum": ["gemini", "slm"] }
       },
-      "required": ["id", "userId", "title", "createdAt", "lastMessageAt"]
+      "required": ["id", "userId", "title", "createdAt", "lastMessageAt"],
+      "additionalProperties": false
     },
     "ChatMessage": {
       "title": "ChatMessage",
-      "description": "A message within a chat session",
+      "description": "A message within an AI chat session",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "role": { "type": "string", "enum": ["user", "assistant", "system"] },
         "content": { "type": "string" },
         "timestamp": { "type": "number" },
-        "provider": { "type": "string", "enum": ["gemini"] }
+        "provider": { "type": "string", "enum": ["gemini", "slm"] }
       },
-      "required": ["id", "role", "content", "timestamp"]
+      "required": ["role", "content", "timestamp"],
+      "additionalProperties": false
     },
     "Mail": {
       "title": "Mail",
-      "description": "Email document for the Trigger Email extension",
+      "description": "Email message document for Trigger Email extension",
       "type": "object",
       "properties": {
         "to": { "type": "string", "format": "email" },
@@ -101,15 +138,18 @@
             "subject": { "type": "string" },
             "text": { "type": "string" },
             "html": { "type": "string" }
-          }
+          },
+          "required": ["subject", "html"],
+          "additionalProperties": false
         },
         "timestamp": { "type": "object" }
       },
-      "required": ["to", "message"]
+      "required": ["to", "message"],
+      "additionalProperties": false
     },
     "SlmKnowledge": {
       "title": "SlmKnowledge",
-      "description": "Learned knowledge, user health patterns, and distilled medical tasks stored by the SLM",
+      "description": "Learned clinical knowledge and distilled health reasoning for SLM",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -122,29 +162,99 @@
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" }
       },
-      "required": ["id", "userId", "type", "topic", "content", "source", "createdAt", "updatedAt"]
+      "required": ["id", "userId", "type", "topic", "content", "source", "createdAt", "updatedAt"],
+      "additionalProperties": false
+    },
+    "AiReport": {
+      "title": "AiReport",
+      "description": "Diagnostic and safety reports submitted by users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "comment": { "type": "string" },
+        "responseSnippet": { "type": "string" },
+        "provider": { "type": "string", "enum": ["gemini", "slm"] },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "category", "responseSnippet", "provider", "timestamp"],
+      "additionalProperties": false
+    },
+    "ServerChatLimit": {
+      "title": "ServerChatLimit",
+      "description": "Server-side rate limiting tracker for AI queries",
+      "type": "object",
+      "properties": {
+        "count": { "type": "number" },
+        "windowStart": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "MedicineCache": {
+      "title": "MedicineCache",
+      "description": "Server-side cache of medicine metadata and formulations",
+      "type": "object",
+      "properties": {
+        "data": { "type": "object" },
+        "updatedAt": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "ExtractionCache": {
+      "title": "ExtractionCache",
+      "description": "Server-side OCR extraction hash cache",
+      "type": "object",
+      "properties": {
+        "extracted": { "type": "object" },
+        "timestamp": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "ServerExpirySchedule": {
+      "title": "ServerExpirySchedule",
+      "description": "Server-side notification cron dispatch schedule",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "scheduledAt": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "ServerSentExpiryAlert": {
+      "title": "ServerSentExpiryAlert",
+      "description": "Server-side audit log of dispatched expiry alerts",
+      "type": "object",
+      "properties": {
+        "alertKey": { "type": "string" },
+        "sentAt": { "type": "number" }
+      },
+      "additionalProperties": false
     }
   },
   "firestore": {
     "/mail/{mailId}": {
       "schema": "Mail",
-      "description": "Collection for the Trigger Email Firebase Extension"
+      "description": "Collection for email notifications"
     },
     "/medicines/{medicineId}": {
       "schema": "Medicine",
-      "description": "Collection of medicines"
+      "description": "Vault medicines collection"
     },
     "/medicines/{medicineId}/history/{historyId}": {
       "schema": "MedicineHistory",
-      "description": "Subcollection of history logs for a medicine"
+      "description": "Subcollection of audit logs for each medicine"
     },
     "/users/{userId}/settings/appSettings": {
       "schema": "UserConfig",
-      "description": "User configuration and preferences"
+      "description": "Unified user configuration and settings document"
+    },
+    "/users/{userId}/pushTokens/{tokenId}": {
+      "schema": "PushToken",
+      "description": "FCM device tokens for push notifications"
     },
     "/users/{userId}/chats/{sessionId}": {
       "schema": "ChatSession",
-      "description": "User's AI chat sessions"
+      "description": "User's AI pharmacist chat sessions"
     },
     "/users/{userId}/chats/{sessionId}/messages/{messageId}": {
       "schema": "ChatMessage",
@@ -152,7 +262,31 @@
     },
     "/users/{userId}/slmKnowledge/{knowledgeId}": {
       "schema": "SlmKnowledge",
-      "description": "User-trained SLM knowledge and distilled Gemini reasoning cache"
+      "description": "User-specific trained SLM knowledge entries"
+    },
+    "/aiReports/{reportId}": {
+      "schema": "AiReport",
+      "description": "Safety and diagnosis reports collection"
+    },
+    "/server_chat_limits/{limitId}": {
+      "schema": "ServerChatLimit",
+      "description": "Server-side internal chat rate limits"
+    },
+    "/medicine_cache/{name}": {
+      "schema": "MedicineCache",
+      "description": "Server-side medicine metadata cache"
+    },
+    "/extraction_cache/{hash}": {
+      "schema": "ExtractionCache",
+      "description": "Server-side OCR image extraction cache"
+    },
+    "/server_expiry_schedules/{scheduleId}": {
+      "schema": "ServerExpirySchedule",
+      "description": "Server-side cron schedule trackers"
+    },
+    "/server_sent_expiry_alerts/{alertId}": {
+      "schema": "ServerSentExpiryAlert",
+      "description": "Server-side dispatched alert deduplication log"
     }
   }
 }

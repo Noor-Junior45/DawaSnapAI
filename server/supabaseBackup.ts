@@ -1,8 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Environment variables configuration (no hardcoded keys in source code)
+// Environment variables configuration: strictly server-only SUPABASE_SERVICE_ROLE_KEY (no anon key on server)
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -32,29 +32,28 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
- * Tests connection to the Supabase PostgreSQL database.
+ * Tests connection to the Supabase PostgreSQL database using the service role key.
  */
 export async function testSupabaseConnection(): Promise<{ ok: boolean; message: string }> {
   const client = getSupabaseClient();
   if (!client) {
     return {
       ok: false,
-      message: 'Supabase credentials not configured in environment variables (SUPABASE_URL and SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY).',
+      message: 'Supabase credentials not configured in environment variables. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.',
     };
   }
 
   try {
-    // Attempt lightweight query on the medicines backup table
-    const { data, error } = await client.from('medicines').select('id').limit(1);
+    const { error } = await client.from('medicines').select('id').limit(1);
     if (error) {
       return {
         ok: false,
-        message: `Connected to Supabase, but query returned error: ${error.message}. (Ensure tables are created using the provided SQL script).`,
+        message: `Connected to Supabase, but query returned error: ${error.message}. (Ensure tables are created in Supabase).`,
       };
     }
     return {
       ok: true,
-      message: 'Successfully connected to Supabase PostgreSQL database.',
+      message: 'Successfully connected to Supabase PostgreSQL database using service role.',
     };
   } catch (err: any) {
     return {
@@ -65,9 +64,34 @@ export async function testSupabaseConnection(): Promise<{ ok: boolean; message: 
 }
 
 /**
- * Formats a Firestore medicine document into a clean PostgreSQL row.
+ * Parses timestamps from various Firestore representations (number ms, Timestamp object, or ISO string)
  */
-function formatMedicineForPostgres(m: any): Record<string, any> {
+export function getIsoDateFromSource(val: any): string | null {
+  if (!val) return null;
+  if (typeof val === 'number') {
+    return new Date(val).toISOString();
+  }
+  if (typeof val === 'string') {
+    const parsed = Date.parse(val);
+    return !isNaN(parsed) ? new Date(parsed).toISOString() : null;
+  }
+  if (val && typeof val.toMillis === 'function') {
+    return new Date(val.toMillis()).toISOString();
+  }
+  if (val && typeof val.toDate === 'function') {
+    return val.toDate().toISOString();
+  }
+  return null;
+}
+
+/**
+ * Formats a Firestore medicine document into a clean PostgreSQL row.
+ * Strictly stores the source updatedAt in Supabase updated_at (convert from ms), NEVER sync time.
+ */
+export function formatMedicineForPostgres(m: any): Record<string, any> {
+  const sourceUpdatedAt = getIsoDateFromSource(m.updatedAt) || getIsoDateFromSource(m.createdAt) || new Date(0).toISOString();
+  const sourceDeletedAt = m.deletedAt ? (getIsoDateFromSource(m.deletedAt) || new Date(m.deletedAt).toISOString()) : null;
+
   return {
     id: String(m.id || ''),
     user_id: String(m.userId || ''),
@@ -88,10 +112,10 @@ function formatMedicineForPostgres(m: any): Record<string, any> {
     taken: Boolean(m.taken),
     liked: Boolean(m.liked),
     is_deleted: Boolean(m.isDeleted),
-    deleted_at: m.deletedAt ? new Date(m.deletedAt).toISOString() : null,
+    deleted_at: sourceDeletedAt,
     batches: m.batches ? JSON.stringify(m.batches) : null,
     raw_payload: JSON.stringify(m),
-    updated_at: new Date().toISOString(),
+    updated_at: sourceUpdatedAt, // Converted from source updatedAt, not current sync time!
   };
 }
 
@@ -163,6 +187,7 @@ export async function backupUserConfigToSupabase(config: any): Promise<boolean> 
   if (!client || !config?.userId) return false;
 
   try {
+    const sourceUpdatedAt = getIsoDateFromSource(config.updatedAt) || new Date().toISOString();
     const row = {
       user_id: String(config.userId),
       email: config.email || null,
@@ -173,7 +198,7 @@ export async function backupUserConfigToSupabase(config: any): Promise<boolean> 
       sort_order: config.sortOrder || 'default',
       low_quantity_threshold: typeof config.lowQuantityThreshold === 'number' ? config.lowQuantityThreshold : 5,
       theme: config.theme || 'system',
-      updated_at: new Date().toISOString(),
+      updated_at: sourceUpdatedAt,
     };
 
     const { error } = await client
@@ -192,7 +217,7 @@ export async function backupUserConfigToSupabase(config: any): Promise<boolean> 
 }
 
 /**
- * Permanently removes or soft-deletes a single medicine from Supabase.
+ * Permanently removes a single medicine from Supabase.
  */
 export async function deleteMedicineFromSupabase(medicineId: string, userId?: string): Promise<boolean> {
   const client = getSupabaseClient();
@@ -240,7 +265,7 @@ export async function deleteMedicinesBatchFromSupabase(medicineIds: string[], us
 }
 
 /**
- * Backs up a medicine audit history event to Supabase (if table exists).
+ * Backs up a medicine audit history event to Supabase.
  */
 export async function backupMedicineHistoryToSupabase(history: any): Promise<boolean> {
   const client = getSupabaseClient();
@@ -251,7 +276,7 @@ export async function backupMedicineHistoryToSupabase(history: any): Promise<boo
       id: String(history.id),
       medicine_id: String(history.medicineId || history.medId || ''),
       user_id: history.userId ? String(history.userId) : null,
-      action: history.action || 'update',
+      action: history.actionType || history.action || 'EDIT',
       details: history.details || null,
       timestamp: history.timestamp ? new Date(history.timestamp).toISOString() : new Date().toISOString(),
       raw_payload: JSON.stringify(history)
@@ -259,7 +284,6 @@ export async function backupMedicineHistoryToSupabase(history: any): Promise<boo
 
     const { error } = await client.from('medicine_history').upsert(row, { onConflict: 'id' });
     if (error) {
-      // Suppress warning if table is not yet created by user
       if (error.code !== 'PGRST205') {
         console.warn(`[SUPABASE BACKUP] Medicine history error:`, error.message);
       }
@@ -272,7 +296,53 @@ export async function backupMedicineHistoryToSupabase(history: any): Promise<boo
 }
 
 /**
- * Completely purges all data for a specific user from Supabase (account deletion compliance).
+ * Batch upserts medicine history records into Supabase in chunks.
+ */
+export async function backupMedicineHistoryBatchToSupabase(items: any[]): Promise<{ success: number; failed: number }> {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(items) || items.length === 0) {
+    return { success: 0, failed: 0 };
+  }
+
+  const rows = items.filter(h => h && h.id).map(history => ({
+    id: String(history.id),
+    medicine_id: String(history.medicineId || history.medId || ''),
+    user_id: history.userId ? String(history.userId) : null,
+    action: history.actionType || history.action || 'EDIT',
+    details: history.details || null,
+    timestamp: history.timestamp ? new Date(history.timestamp).toISOString() : new Date().toISOString(),
+    raw_payload: JSON.stringify(history)
+  }));
+
+  const CHUNK_SIZE = 50;
+  let success = 0;
+  let failed = 0;
+
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + CHUNK_SIZE);
+    try {
+      const { error } = await client
+        .from('medicine_history')
+        .upsert(chunk, { onConflict: 'id' });
+
+      if (error) {
+        if (error.code !== 'PGRST205') {
+          console.warn('[SUPABASE BACKUP] Medicine history chunk error:', error.message);
+        }
+        failed += chunk.length;
+      } else {
+        success += chunk.length;
+      }
+    } catch {
+      failed += chunk.length;
+    }
+  }
+
+  return { success, failed };
+}
+
+/**
+ * Purges all records for a user from Supabase.
  */
 export async function deleteUserAllDataFromSupabase(userId: string): Promise<void> {
   const client = getSupabaseClient();
@@ -291,24 +361,40 @@ export async function deleteUserAllDataFromSupabase(userId: string): Promise<voi
 }
 
 /**
- * Fetches all medicines from Supabase (or those modified since a given date)
- * to support syncing edits made in Supabase back into Firebase.
+ * Fetches medicines from Supabase with pagination (range/limit loop).
  */
 export async function fetchMedicinesFromSupabase(sinceIso?: string): Promise<any[]> {
   const client = getSupabaseClient();
   if (!client) return [];
 
+  const allRows: any[] = [];
+  const PAGE_SIZE = 500;
+  let offset = 0;
+  let hasMore = true;
+
   try {
-    let query = client.from('medicines').select('*');
-    if (sinceIso) {
-      query = query.gte('updated_at', sinceIso);
+    while (hasMore) {
+      let query = client.from('medicines').select('*').range(offset, offset + PAGE_SIZE - 1);
+      if (sinceIso) {
+        query = query.gte('updated_at', sinceIso);
+      }
+      const { data, error } = await query;
+      if (error) {
+        console.warn('[SUPABASE BACKUP] Error fetching medicines:', error.message);
+        break;
+      }
+      if (!data || data.length === 0) {
+        hasMore = false;
+      } else {
+        allRows.push(...data);
+        if (data.length < PAGE_SIZE) {
+          hasMore = false;
+        } else {
+          offset += PAGE_SIZE;
+        }
+      }
     }
-    const { data, error } = await query;
-    if (error) {
-      console.warn('[SUPABASE BACKUP] Error fetching medicines:', error.message);
-      return [];
-    }
-    return data || [];
+    return allRows;
   } catch (err) {
     console.warn('[SUPABASE BACKUP] Exception fetching medicines from Supabase:', err);
     return [];
@@ -360,3 +446,49 @@ export async function backupUsersBatchToSupabase(users: any[]): Promise<{ succes
   }
 }
 
+/**
+ * Gets persistent last sync time from Supabase table 'sync_state'.
+ */
+export async function getPersistentSyncState(key: string): Promise<number> {
+  const client = getSupabaseClient();
+  if (!client) return 0;
+
+  try {
+    const { data, error } = await client
+      .from('sync_state')
+      .select('last_sync_time')
+      .eq('key', key)
+      .single();
+
+    if (error || !data) {
+      return 0;
+    }
+    return typeof data.last_sync_time === 'number' ? data.last_sync_time : Number(data.last_sync_time) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Stores persistent last sync time in Supabase table 'sync_state'.
+ */
+export async function setPersistentSyncState(key: string, timestampMs: number): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  try {
+    const { error } = await client
+      .from('sync_state')
+      .upsert({
+        key,
+        last_sync_time: timestampMs,
+        updated_at: new Date(timestampMs).toISOString(),
+      }, { onConflict: 'key' });
+
+    if (error && error.code !== 'PGRST205') {
+      console.warn('[SUPABASE BACKUP] sync_state upsert warning:', error.message);
+    }
+  } catch (err) {
+    console.warn('[SUPABASE BACKUP] Exception updating sync_state:', err);
+  }
+}

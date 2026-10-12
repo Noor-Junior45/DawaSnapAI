@@ -108,19 +108,7 @@ interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
   path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
+  uid: string | undefined;
 }
 
 // Safe stringify helper to handle circular references and non-serializable objects
@@ -128,7 +116,6 @@ const getSafeStringify = () => {
   const cache = new WeakSet();
   return (key: string, value: any) => {
     if (typeof value === 'object' && value !== null) {
-      // Handle React internal fiber nodes and other internal properties early
       if (
         key.startsWith('__reactFiber') || 
         key.startsWith('__reactProps') || 
@@ -144,8 +131,6 @@ const getSafeStringify = () => {
         return '[Circular]';
       }
       
-      // Handle DOM elements which often cause circular issues and can't be stringified
-      // Use multiple checks for robustness across different environments
       const isDOM = (val: any): boolean => {
         try {
           return (
@@ -158,7 +143,7 @@ const getSafeStringify = () => {
               val.constructor.name.includes('HTML')
             ))
           );
-        } catch (e) {
+        } catch {
           return false;
         }
       };
@@ -176,28 +161,16 @@ const getSafeStringify = () => {
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
     operationType,
-    path
-  }
+    path,
+    uid: auth.currentUser?.uid,
+  };
   
   let errString: string;
   try {
     const safeStringify = getSafeStringify();
     errString = JSON.stringify(errInfo, safeStringify);
-  } catch (e) {
+  } catch {
     errString = `{"error": "Failed to stringify error info", "originalError": "${errInfo.error}"}`;
   }
   
