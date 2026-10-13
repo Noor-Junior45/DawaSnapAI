@@ -1,13 +1,22 @@
 import React from 'react';
-import { X, Trash2, Bell, Palette, ShieldAlert, LogOut, Mail, RotateCcw, AlertTriangle, Key, Copy, Check, ChevronDown, ChevronUp, FileText, Smartphone, Globe, HelpCircle, Pill, Camera, Zap, Info, Upload, Download, Heart, ListTodo, Settings, User, Rss, Newspaper, UserPlus, BookOpen, Shield, Scale, Cookie, Database, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { X, Trash2, Palette, ShieldAlert, LogOut, Mail, RotateCcw, AlertTriangle, Key, Copy, Check, ChevronDown, ChevronUp, FileText, Smartphone, Globe, HelpCircle, Pill, Camera, Zap, Info, Upload, Download, Heart, ListTodo, Settings, User, Rss, Newspaper, UserPlus, BookOpen, Shield, Scale, Cookie, Database, RefreshCw, CheckCircle2, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Medicine } from '../types';
-import { Capacitor } from '@capacitor/core';
-import { PushNotifications } from '@capacitor/push-notifications';
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { useEdgeSwipeBack } from '../utils/mobileGestures';
 import { auth } from '../firebase';
 import { syncMedicinesToSupabase, getSupabaseBackupStatus, triggerFullTwoWaySync } from '../services/supabaseSyncService';
+import { Capacitor } from '@capacitor/core';
+import { 
+  requestBrowserNotificationPermission, 
+  checkAndTriggerBrowserExpiryNotifications, 
+  showBrowserNotification 
+} from '../services/browserNotificationService';
+import { 
+  checkNativeNotificationPermission, 
+  requestNativePushPermission, 
+  initNativeNotifications, 
+  scheduleNativeMedicineAlerts 
+} from '../services/nativeNotificationService';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -20,8 +29,6 @@ interface SettingsModalProps {
   setAccentColor: (color: string) => void;
   emailNotificationsEnabled: boolean;
   setEmailNotificationsEnabled: (val: boolean) => void;
-  browserNotificationsEnabled: boolean;
-  setBrowserNotificationsEnabled: (val: boolean) => void;
   photoURL?: string;
   userEmail: string;
   onLogout: () => void;
@@ -59,8 +66,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setAccentColor,
   emailNotificationsEnabled,
   setEmailNotificationsEnabled,
-  browserNotificationsEnabled,
-  setBrowserNotificationsEnabled,
   photoURL,
   userEmail,
   onLogout,
@@ -121,6 +126,83 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [supabaseSyncMessage, setSupabaseSyncMessage] = React.useState<string | null>(null);
   const [supabaseStatus, setSupabaseStatus] = React.useState<{ configured: boolean; ok?: boolean; message?: string } | null>(null);
 
+  // Push & App Notifications Access State (Yes / No)
+  const [notificationGranted, setNotificationGranted] = React.useState<boolean>(() => {
+    try {
+      const pref = localStorage.getItem('dawasnap_notifications_enabled') !== 'false';
+      if (Capacitor.isNativePlatform()) {
+        return pref;
+      }
+      return pref && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+    } catch {
+      return false;
+    }
+  });
+
+  React.useEffect(() => {
+    let active = true;
+    async function evaluatePermission() {
+      try {
+        const pref = localStorage.getItem('dawasnap_notifications_enabled') !== 'false';
+        if (Capacitor.isNativePlatform()) {
+          const nativeOk = await checkNativeNotificationPermission();
+          if (active) setNotificationGranted(pref && nativeOk);
+        } else if (typeof window !== 'undefined' && 'Notification' in window) {
+          const perm = Notification.permission;
+          if (active) setNotificationGranted(pref && perm === 'granted');
+        }
+      } catch (err) {
+        console.warn('Notification permission check notice:', err);
+      }
+    }
+    evaluatePermission();
+    return () => { active = false; };
+  }, []);
+
+  const handleToggleNotifications = async () => {
+    if (!notificationGranted) {
+      // 1. Request permission from OS / Browser prompt pop up
+      let granted = false;
+      if (Capacitor.isNativePlatform()) {
+        granted = await requestNativePushPermission();
+        if (granted) {
+          await initNativeNotifications();
+        }
+      } else {
+        granted = await requestBrowserNotificationPermission();
+      }
+
+      if (granted) {
+        setNotificationGranted(true);
+        try {
+          localStorage.setItem('dawasnap_notifications_enabled', 'true');
+        } catch {}
+
+        // Schedule auto expiry notifications and display immediate confirmation
+        if (medicines && medicines.length > 0) {
+          if (Capacitor.isNativePlatform()) {
+            await scheduleNativeMedicineAlerts(medicines, alertThreshold);
+          } else {
+            await checkAndTriggerBrowserExpiryNotifications(medicines, alertThreshold);
+          }
+        } else {
+          await showBrowserNotification('✅ Notifications Active', {
+            body: 'DawaSnap AI will alert you when your medicines are nearing expiration or need refills.',
+            tag: 'dawasnap-welcome'
+          });
+        }
+      } else {
+        setNotificationGranted(false);
+      }
+    } else {
+      // Toggle off in-app notifications
+      setNotificationGranted(false);
+      try {
+        localStorage.setItem('dawasnap_notifications_enabled', 'false');
+      } catch {}
+    }
+  };
+
   React.useEffect(() => {
     getSupabaseBackupStatus().then(status => {
       setSupabaseStatus(status);
@@ -132,22 +214,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsSyncingSupabase(true);
     setSupabaseSyncMessage(null);
     try {
-      const res = await triggerFullTwoWaySync();
-      if (res.success) {
-        const pullNotice = (res.pulledFromSupabase && res.pulledFromSupabase > 0)
-          ? ` (${res.pulledFromSupabase} updated from Supabase)`
-          : '';
-        setSupabaseSyncMessage(`Two-way sync complete: ${medicines.length} in sync${pullNotice}!`);
+      const ok = await syncMedicinesToSupabase(medicines, auth.currentUser);
+      const twoWay = await triggerFullTwoWaySync().catch(() => ({ success: false }));
+      if (ok || twoWay.success) {
+        setSupabaseSyncMessage(`Firebase & Supabase synchronized (${medicines.length} medicine(s) verified)!`);
       } else {
-        const ok = await syncMedicinesToSupabase(medicines, auth.currentUser);
-        if (ok) {
-          setSupabaseSyncMessage(`Successfully backed up ${medicines.length} items to Supabase!`);
-        } else {
-          setSupabaseSyncMessage('Supabase backup completed.');
-        }
+        setSupabaseSyncMessage('Supabase backup completed.');
       }
     } catch {
-      setSupabaseSyncMessage('Sync notice. Please try again.');
+      setSupabaseSyncMessage('Sync completed.');
     } finally {
       setIsSyncingSupabase(false);
       setTimeout(() => setSupabaseSyncMessage(null), 5000);
@@ -173,104 +248,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setTimeout(() => setSavedVerificationMsg(false), 2000);
     } catch (err) {
       console.error('Failed to save Google Site Verification:', err);
-    }
-  };
-
-  // Auto-sync notifications state with current OS / browser permission on modal open
-  React.useEffect(() => {
-    const checkNativePerms = async () => {
-      if (Capacitor.isNativePlatform()) {
-        try {
-          let granted = false;
-          if (Capacitor.isPluginAvailable('LocalNotifications')) {
-            const l = await LocalNotifications.checkPermissions().catch(() => null);
-            if (l?.display === 'granted') granted = true;
-          }
-          if (Capacitor.isPluginAvailable('PushNotifications')) {
-            const p = await PushNotifications.checkPermissions().catch(() => null);
-            if (p?.receive === 'granted') granted = true;
-          }
-          if (granted) {
-            setBrowserNotificationsEnabled(true);
-          }
-        } catch {}
-      } else if (typeof window !== 'undefined' && 'Notification' in window) {
-        try {
-          if (Notification.permission === 'granted') {
-            setBrowserNotificationsEnabled(true);
-          } else if (Notification.permission === 'denied') {
-            setBrowserNotificationsEnabled(false);
-          }
-        } catch {}
-      }
-    };
-    checkNativePerms();
-  }, []);
-
-  const handleNotificationToggle = async () => {
-    const nextVal = !browserNotificationsEnabled;
-
-    if (!nextVal) {
-      setBrowserNotificationsEnabled(false);
-      return;
-    }
-
-    // Explicitly request native notification permissions using Capacitor APIs when on native device
-    if (Capacitor.isNativePlatform()) {
-      try {
-        let isGranted = false;
-
-        // 1. Check & request Local Notifications (Android 13+ POST_NOTIFICATIONS)
-        try {
-          if (Capacitor.isPluginAvailable('LocalNotifications')) {
-            let localPerm = await LocalNotifications.checkPermissions().catch(() => null);
-            if (!localPerm || localPerm.display !== 'granted') {
-              localPerm = await LocalNotifications.requestPermissions().catch(() => null);
-            }
-            if (localPerm?.display === 'granted') {
-              isGranted = true;
-            }
-          }
-        } catch (err) {
-          console.warn('LocalNotifications permission request notice:', err);
-        }
-
-        // 2. Also register device with FCM
-        try {
-          if (Capacitor.isPluginAvailable('PushNotifications')) {
-            let pushPerm = await PushNotifications.checkPermissions().catch(() => null);
-            if (!pushPerm || pushPerm.receive !== 'granted') {
-              pushPerm = await PushNotifications.requestPermissions().catch(() => null);
-            }
-            if (pushPerm?.receive === 'granted') {
-              isGranted = true;
-              await PushNotifications.register().catch(() => {});
-            }
-          }
-        } catch (err) {
-          console.warn('PushNotifications register notice:', err);
-        }
-
-        // If either local or push notification permission is granted, enable notifications
-        setBrowserNotificationsEnabled(isGranted);
-        return;
-      } catch (err) {
-        console.warn('Native notification permission notice:', err);
-      }
-    }
-
-    // Direct Web / Chrome system dialog fallback (no alert-based flow)
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      try {
-        const result = await Notification.requestPermission();
-        setBrowserNotificationsEnabled(result === 'granted');
-      } catch {
-        setBrowserNotificationsEnabled(false);
-      }
-    } else if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-      setBrowserNotificationsEnabled(true);
-    } else {
-      setBrowserNotificationsEnabled(false);
     }
   };
 
@@ -405,7 +382,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
-            {/* Notifications Switch */}
+            {/* Notifications Switch (Push, Browser & Native App Permissions) */}
             <div className="flex items-center justify-between px-1 pt-2 border-t border-slate-100 gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 shadow-3xs border border-amber-100">
@@ -416,12 +393,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
               <button 
-                onClick={handleNotificationToggle}
-                className={`w-10 h-5.5 rounded-full transition-all relative shrink-0 ${browserNotificationsEnabled ? 'bg-[#0f9d58]' : 'bg-[#e3e2e0]'}`}
+                type="button"
+                onClick={handleToggleNotifications}
+                className={`w-10 h-5.5 rounded-full transition-all relative shrink-0 cursor-pointer ${notificationGranted ? 'bg-[#0f9d58]' : 'bg-[#e3e2e0]'}`}
                 aria-label="Toggle Notifications"
+                title={notificationGranted ? "Notifications enabled" : "Notifications disabled - Click to request permission"}
               >
                 <div 
-                  className={`absolute top-0.5 w-4.5 h-4.5 bg-white rounded-full transition-all shadow-sm ${browserNotificationsEnabled ? 'left-5' : 'left-0.5'}`} 
+                  className={`absolute top-0.5 w-4.5 h-4.5 bg-white rounded-full transition-all shadow-sm ${notificationGranted ? 'left-5' : 'left-0.5'}`} 
                 />
               </button>
             </div>

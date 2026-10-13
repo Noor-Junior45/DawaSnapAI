@@ -1,5 +1,6 @@
 import { initializeApp, getApps, cert, applicationDefault, type App } from 'firebase-admin/app';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import type { Request, Response, NextFunction } from 'express';
 import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
 
@@ -64,6 +65,17 @@ export function initFirebaseAdmin(): App {
 
 export function getAdminApp(): App {
   return initFirebaseAdmin();
+}
+
+let cachedAdminDb: Firestore | null = null;
+export function getAdminDb(): Firestore {
+  if (cachedAdminDb) return cachedAdminDb;
+  const app = getAdminApp();
+  cachedAdminDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  try {
+    cachedAdminDb.settings({ ignoreUndefinedProperties: true });
+  } catch {}
+  return cachedAdminDb;
 }
 
 export function hasServiceAccountConfigured(): boolean {

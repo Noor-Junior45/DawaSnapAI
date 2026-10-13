@@ -32,11 +32,12 @@ export async function syncExpiryScheduleWithServer(
 
   const activeMeds = medicines
     .filter(m => !m.isDeleted && !m.taken && m.expirationDate)
+    .slice(0, 500)
     .map(m => ({
       id: m.id,
-      name: m.name,
-      expirationDate: m.expirationDate!,
-      quantity: m.quantity || 1,
+      name: String(m.name || '').slice(0, 200),
+      expirationDate: String(m.expirationDate!).slice(0, 50),
+      quantity: typeof m.quantity === 'number' ? Math.max(0, m.quantity) : 1,
       enableEmailExpiryAlert: m.enableEmailExpiryAlert !== false
     }));
 

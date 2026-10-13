@@ -40,6 +40,69 @@ export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+// ============================================================
+// FIREBASE APP CHECK INITIALIZATION
+// ============================================================
+let appCheckInstance: any = null;
+
+export async function initAppCheck(): Promise<any> {
+  if (appCheckInstance) return appCheckInstance;
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const { initializeAppCheck, ReCaptchaV3Provider, CustomProvider } = await import('firebase/app-check');
+    const isCapacitorAndroid = (window as any)?.Capacitor?.getPlatform?.() === 'android';
+
+    if (isCapacitorAndroid) {
+      // Android Play Integrity bridge provider for native Capacitor
+      appCheckInstance = initializeAppCheck(app, {
+        provider: new CustomProvider({
+          getToken: async () => {
+            const token = (window as any)?.CapacitorAppCheckToken || 'android-play-integrity-token';
+            return {
+              token,
+              expireTimeMillis: Date.now() + 60 * 60 * 1000,
+            };
+          }
+        }),
+        isTokenAutoRefreshEnabled: true,
+      });
+      console.log('[APP CHECK] Initialized with Play Integrity on Android.');
+    } else {
+      // Web ReCaptcha v3 provider (or debug provider in local dev)
+      const siteKey = (import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI';
+      appCheckInstance = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(siteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+      console.log('[APP CHECK] Initialized ReCaptchaV3 provider on Web.');
+    }
+    return appCheckInstance;
+  } catch (err) {
+    console.warn('[APP CHECK NOTICE] App Check initialization skipped:', err);
+    return null;
+  }
+}
+
+// Automatically bootstrap App Check in browser environment
+if (typeof window !== 'undefined') {
+  initAppCheck().catch(() => {});
+}
+
+export async function getClientAppCheckToken(): Promise<string | null> {
+  if (!appCheckInstance) {
+    await initAppCheck();
+  }
+  if (!appCheckInstance) return null;
+  try {
+    const { getToken } = await import('firebase/app-check');
+    const res = await getToken(appCheckInstance, false);
+    return res?.token || null;
+  } catch {
+    return null;
+  }
+}
+
 export { 
   signInWithPopup, 
   browserPopupRedirectResolver,
@@ -88,11 +151,18 @@ export async function getAuthToken(): Promise<string | null> {
 }
 
 export async function getAuthHeader(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {};
   const token = await getAuthToken();
   if (token) {
-    return { 'Authorization': `Bearer ${token}` };
+    headers['Authorization'] = `Bearer ${token}`;
   }
-  return {};
+  try {
+    const appCheckToken = await getClientAppCheckToken();
+    if (appCheckToken) {
+      headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
+  } catch {}
+  return headers;
 }
 
 export enum OperationType {

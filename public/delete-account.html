@@ -386,28 +386,20 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
   <script>
-    // Firebase App Configuration (Public Client Credentials)
-    const firebaseConfig = {
-      apiKey: "AIzaSyD75c5xpRzpzeg9RJaW3fcP9guhHF7WE18",
-      authDomain: "gen-lang-client-0044881146.firebaseapp.com",
-      projectId: "gen-lang-client-0044881146",
-      storageBucket: "gen-lang-client-0044881146.firebasestorage.app",
-      messagingSenderId: "418374139038",
-      appId: "1:418374139038:web:bb9441146f6c48d9984f8f"
-    };
-
     let fbApp = null;
     let fbAuth = null;
     let fbDb = null;
     let currentUser = null;
 
-    try {
-      if (typeof firebase !== 'undefined') {
-        fbApp = firebase.initializeApp(firebaseConfig);
-        fbAuth = firebase.auth();
-        fbDb = firebase.firestore();
+    fetch('/firebase-applet-config.json')
+      .then(r => r.json())
+      .then(firebaseConfig => {
+        if (typeof firebase !== 'undefined') {
+          fbApp = firebase.initializeApp(firebaseConfig);
+          fbAuth = firebase.auth();
+          fbDb = firebase.firestore();
 
-        fbAuth.onAuthStateChanged(function(user) {
+          fbAuth.onAuthStateChanged(function(user) {
           currentUser = user;
           const signedOutState = document.getElementById('signed-out-state');
           const signedInState = document.getElementById('signed-in-state');

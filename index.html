@@ -1,6 +1,111 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Shield Vite WebSocket HMR disconnect notices in AI Studio preview iframe -->
+    <script>
+      (function() {
+        // Shield against any unhandled WebSocket connection errors
+        window.addEventListener('unhandledrejection', function(e) {
+          var reason = e && e.reason;
+          var msg = (reason && (reason.message || reason.stack)) || String(reason || '');
+          if (
+            msg.indexOf('WebSocket') !== -1 ||
+            msg.indexOf('websocket') !== -1 ||
+            msg.indexOf('closed without opened') !== -1 ||
+            msg.indexOf('failed to connect to websocket') !== -1 ||
+            msg.indexOf('@vite/client') !== -1
+          ) {
+            e.preventDefault();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+          }
+        });
+
+        window.addEventListener('error', function(e) {
+          var msg = (e && (e.message || '')) || '';
+          if (
+            msg.indexOf('WebSocket') !== -1 ||
+            msg.indexOf('websocket') !== -1 ||
+            msg.indexOf('closed without opened') !== -1 ||
+            msg.indexOf('failed to connect to websocket') !== -1 ||
+            msg.indexOf('@vite/client') !== -1
+          ) {
+            e.preventDefault();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+          }
+        });
+
+        // Safe WebSocket stub specifically for Vite HMR in cloud preview
+        var RealWebSocket = window.WebSocket;
+        if (typeof RealWebSocket !== 'undefined') {
+          function SafeWebSocket(url, protocols) {
+            var urlStr = String(url || '');
+            var isHmr = 
+              protocols === 'vite-hmr' || 
+              protocols === 'vite-ping' || 
+              urlStr.indexOf('vite-hmr') !== -1 || 
+              urlStr.indexOf('token=') !== -1 ||
+              urlStr.indexOf('@vite') !== -1;
+
+            if (isHmr) {
+              var self = this;
+              this.url = urlStr;
+              this.protocols = protocols;
+              this.readyState = 1; // WebSocket.OPEN
+              this.CONNECTING = 0;
+              this.OPEN = 1;
+              this.CLOSING = 2;
+              this.CLOSED = 3;
+              this.binaryType = 'blob';
+              this.bufferedAmount = 0;
+              this.extensions = '';
+              this.protocol = typeof protocols === 'string' ? protocols : '';
+              this._listeners = {};
+
+              this.addEventListener = function(type, fn) {
+                if (!self._listeners[type]) self._listeners[type] = [];
+                self._listeners[type].push(fn);
+              };
+              this.removeEventListener = function(type, fn) {
+                if (!self._listeners[type]) return;
+                self._listeners[type] = self._listeners[type].filter(function(l) { return l !== fn; });
+              };
+              this.dispatchEvent = function(evt) {
+                var list = self._listeners[evt.type] || [];
+                for (var i = 0; i < list.length; i++) {
+                  try { list[i](evt); } catch (err) {}
+                }
+                if (typeof self['on' + evt.type] === 'function') {
+                  try { self['on' + evt.type](evt); } catch (err) {}
+                }
+                return true;
+              };
+              this.send = function() {};
+              this.close = function() {
+                self.readyState = 3;
+                self.dispatchEvent({ type: 'close', wasClean: true, code: 1000, reason: '' });
+              };
+
+              setTimeout(function() {
+                self.dispatchEvent({ type: 'open' });
+              }, 0);
+              return;
+            }
+
+            return new RealWebSocket(url, protocols);
+          }
+
+          SafeWebSocket.prototype = RealWebSocket.prototype;
+          SafeWebSocket.CONNECTING = 0;
+          SafeWebSocket.OPEN = 1;
+          SafeWebSocket.CLOSING = 2;
+          SafeWebSocket.CLOSED = 3;
+
+          try {
+            window.WebSocket = SafeWebSocket;
+          } catch (err) {}
+        }
+      })();
+    </script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-12TGXLCFW4"></script>
     <script>

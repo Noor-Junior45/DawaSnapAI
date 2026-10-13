@@ -9,7 +9,7 @@ const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env : 
 export const RENDER_BACKEND_URL = 
   (metaEnv?.VITE_BACKEND_URL) 
     ? String(metaEnv.VITE_BACKEND_URL).replace(/\/+$/, '') 
-    : "https://dawalensai.onrender.com";
+    : "https://dawasnapai.onrender.com";
 
 /**
  * Resolves API URL.
@@ -34,4 +34,31 @@ export function getApiUrl(path: string): string {
 export function getDirectRenderUrl(path: string): string {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return `${RENDER_BACKEND_URL}${cleanPath}`;
+}
+
+/**
+ * Builds standard API headers including Firebase Auth token and App Check token.
+ */
+export async function getStandardApiHeaders(user?: any, additionalHeaders: Record<string, string> = {}): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...additionalHeaders,
+  };
+
+  if (user && typeof user.getIdToken === 'function') {
+    try {
+      const idToken = await user.getIdToken();
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+    } catch {}
+  }
+
+  try {
+    const { getClientAppCheckToken } = await import('../firebase');
+    const appCheckToken = await getClientAppCheckToken();
+    if (appCheckToken) {
+      headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
+  } catch {}
+
+  return headers;
 }

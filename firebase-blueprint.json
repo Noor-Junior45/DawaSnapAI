@@ -81,20 +81,20 @@
         "lowQuantityThreshold": { "type": "number" },
         "theme": { "type": "string", "enum": ["system", "light", "dark"] }
       },
-      "required": ["userId", "email"],
+      "required": ["userId"],
       "additionalProperties": false
     },
-    "PushToken": {
-      "title": "PushToken",
-      "description": "FCM device registration token for push notifications",
+    "DailyChatQuota": {
+      "title": "DailyChatQuota",
+      "description": "Daily chat quota and rewarded bonus tracker",
       "type": "object",
       "properties": {
-        "token": { "type": "string" },
-        "platform": { "type": "string" },
-        "appVersion": { "type": "string" },
-        "updatedAt": { "type": "string" }
+        "dateKey": { "type": "string" },
+        "used": { "type": "number" },
+        "bonus": { "type": "number" },
+        "updatedAt": { "type": "number" }
       },
-      "required": ["token"],
+      "required": ["dateKey", "used", "bonus", "updatedAt"],
       "additionalProperties": false
     },
     "ChatSession": {
@@ -229,6 +229,22 @@
         "sentAt": { "type": "number" }
       },
       "additionalProperties": false
+    },
+    "ServerDeletionRequest": {
+      "title": "ServerDeletionRequest",
+      "description": "Server audit log and pending account deletion requests",
+      "type": "object",
+      "properties": {
+        "referenceId": { "type": "string" },
+        "email": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string" },
+        "token": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["referenceId", "email", "status", "createdAt"],
+      "additionalProperties": false
     }
   },
   "firestore": {
@@ -248,10 +264,6 @@
       "schema": "UserConfig",
       "description": "Unified user configuration and settings document"
     },
-    "/users/{userId}/pushTokens/{tokenId}": {
-      "schema": "PushToken",
-      "description": "FCM device tokens for push notifications"
-    },
     "/users/{userId}/chats/{sessionId}": {
       "schema": "ChatSession",
       "description": "User's AI pharmacist chat sessions"
@@ -263,6 +275,10 @@
     "/users/{userId}/slmKnowledge/{knowledgeId}": {
       "schema": "SlmKnowledge",
       "description": "User-specific trained SLM knowledge entries"
+    },
+    "/users/{userId}/dailyChatQuota/{quotaId}": {
+      "schema": "DailyChatQuota",
+      "description": "Daily chat quota and usage metrics"
     },
     "/aiReports/{reportId}": {
       "schema": "AiReport",
@@ -287,6 +303,10 @@
     "/server_sent_expiry_alerts/{alertId}": {
       "schema": "ServerSentExpiryAlert",
       "description": "Server-side dispatched alert deduplication log"
+    },
+    "/server_deletion_requests/{reqId}": {
+      "schema": "ServerDeletionRequest",
+      "description": "Account deletion verification requests"
     }
   }
 }

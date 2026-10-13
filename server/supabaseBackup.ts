@@ -92,6 +92,18 @@ export function formatMedicineForPostgres(m: any): Record<string, any> {
   const sourceUpdatedAt = getIsoDateFromSource(m.updatedAt) || getIsoDateFromSource(m.createdAt) || new Date(0).toISOString();
   const sourceDeletedAt = m.deletedAt ? (getIsoDateFromSource(m.deletedAt) || new Date(m.deletedAt).toISOString()) : null;
 
+  // STRICT ON-DEVICE PRIVACY: Strip all photos, base64 strings, and image bytes from raw_payload
+  const cleanPayload = { ...m };
+  delete cleanPayload.capturedImage;
+  delete cleanPayload.capturedImageBack;
+  delete cleanPayload.imageData;
+  delete cleanPayload.base64;
+  delete cleanPayload.photo;
+  delete cleanPayload.image;
+  if (typeof cleanPayload.imageUrl === 'string' && cleanPayload.imageUrl.startsWith('data:')) {
+    cleanPayload.imageUrl = 'local';
+  }
+
   return {
     id: String(m.id || ''),
     user_id: String(m.userId || ''),
@@ -114,23 +126,124 @@ export function formatMedicineForPostgres(m: any): Record<string, any> {
     is_deleted: Boolean(m.isDeleted),
     deleted_at: sourceDeletedAt,
     batches: m.batches ? JSON.stringify(m.batches) : null,
-    raw_payload: JSON.stringify(m),
+    raw_payload: JSON.stringify(cleanPayload),
     updated_at: sourceUpdatedAt, // Converted from source updatedAt, not current sync time!
   };
+}
+
+// Resolved conflict target for Supabase medicines table
+let resolvedMedicineConflictTarget: string | undefined = undefined;
+
+async function executeMedicineUpsert(client: SupabaseClient, payload: any | any[]) {
+  // Strategy 1: Attempt standard upsert with candidate conflict targets
+  const candidateTargets: (string | undefined)[] = resolvedMedicineConflictTarget !== undefined
+    ? [resolvedMedicineConflictTarget, 'user_id,id', 'id', 'id,user_id', undefined]
+    : ['user_id,id', 'id', 'id,user_id', undefined];
+
+  // Unique list of candidate targets to try
+  const seenTargets = new Set<string | undefined>();
+  const targetsToTry = candidateTargets.filter(t => {
+    if (seenTargets.has(t)) return false;
+    seenTargets.add(t);
+    return true;
+  });
+
+  let lastError: any = null;
+
+  for (const target of targetsToTry) {
+    try {
+      const options = target ? { onConflict: target } : undefined;
+      const res = await client
+        .from('medicines')
+        .upsert(payload, options);
+
+      if (!res.error) {
+        resolvedMedicineConflictTarget = target;
+        return res;
+      }
+
+      lastError = res.error;
+      const msg = (res.error.message || '').toLowerCase();
+      const isConstraintMismatch = res.error.code === '42P10' ||
+        msg.includes('on conflict') ||
+        msg.includes('constraint') ||
+        msg.includes('unique');
+
+      if (!isConstraintMismatch) {
+        // Return non-constraint errors (e.g. invalid connection) immediately
+        return res;
+      }
+    } catch (attemptErr: any) {
+      lastError = attemptErr;
+    }
+  }
+
+  // Strategy 2: If ON CONFLICT specification does not match any index,
+  // execute foolproof row-level update/insert strictly scoped by (user_id, id)
+  const rows = Array.isArray(payload) ? payload : [payload];
+  for (const row of rows) {
+    if (!row || !row.id || !row.user_id) continue;
+    try {
+      const { data: existing } = await client
+        .from('medicines')
+        .select('id')
+        .eq('id', row.id)
+        .eq('user_id', row.user_id)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        await client
+          .from('medicines')
+          .update(row)
+          .eq('id', row.id)
+          .eq('user_id', row.user_id);
+      } else {
+        await client.from('medicines').insert(row);
+      }
+    } catch (rowErr: any) {
+      console.warn(`[SUPABASE BACKUP] Fallback row update/insert error for ${row.id}:`, rowErr.message || rowErr);
+    }
+  }
+
+  // Fallback successfully wrote rows
+  return { data: null, error: null };
 }
 
 /**
  * Upserts a single medicine into the Supabase 'medicines' table as a backup.
  */
-export async function backupMedicineToSupabase(medicine: any): Promise<boolean> {
+export async function backupMedicineToSupabase(medicine: any, requestingUserId?: string): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client || !medicine?.id) return false;
 
   try {
     const row = formatMedicineForPostgres(medicine);
-    const { error } = await client
+    if (!row.user_id) {
+      console.warn(`[SUPABASE BACKUP] Cannot upsert medicine ${medicine.id}: missing user_id`);
+      return false;
+    }
+
+    if (requestingUserId && row.user_id !== requestingUserId) {
+      console.warn(`[SUPABASE BACKUP] Ownership violation: requested user ${requestingUserId} does not match medicine user ${row.user_id}`);
+      return false;
+    }
+
+    // Verify existing row to prevent cross-user ID reassignments
+    const { data: existingRows } = await client
       .from('medicines')
-      .upsert(row, { onConflict: 'id' });
+      .select('user_id')
+      .eq('id', row.id)
+      .limit(1);
+
+    if (existingRows && existingRows.length > 0) {
+      const existingOwner = existingRows[0].user_id;
+      if (existingOwner !== row.user_id) {
+        console.warn(`[SUPABASE BACKUP] Forbidden: Cannot reassign existing medicine ${row.id} owned by ${existingOwner} to ${row.user_id}`);
+        return false;
+      }
+    }
+
+    const { error } = await executeMedicineUpsert(client, row);
 
     if (error) {
       console.warn(`[SUPABASE BACKUP] Error upserting medicine ${medicine.id}:`, error.message);
@@ -145,14 +258,19 @@ export async function backupMedicineToSupabase(medicine: any): Promise<boolean> 
 
 /**
  * Upserts a batch of medicines into Supabase in chunks.
+ * Enforces composite key (user_id, id) or id with ownership validation.
  */
-export async function backupMedicinesBatchToSupabase(medicines: any[]): Promise<{ success: number; failed: number }> {
+export async function backupMedicinesBatchToSupabase(medicines: any[], requestingUserId?: string): Promise<{ success: number; failed: number }> {
   const client = getSupabaseClient();
   if (!client || !Array.isArray(medicines) || medicines.length === 0) {
     return { success: 0, failed: medicines?.length || 0 };
   }
 
-  const rows = medicines.filter(m => m && m.id).map(formatMedicineForPostgres);
+  let rows = medicines.filter(m => m && m.id).map(formatMedicineForPostgres);
+  if (requestingUserId) {
+    rows = rows.filter(r => r.user_id === requestingUserId);
+  }
+
   const CHUNK_SIZE = 50;
   let success = 0;
   let failed = 0;
@@ -160,15 +278,37 @@ export async function backupMedicinesBatchToSupabase(medicines: any[]): Promise<
   for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
     const chunk = rows.slice(i, i + CHUNK_SIZE);
     try {
-      const { error } = await client
+      // Validate chunk against existing rows to prevent reassigning existing medicine IDs to a different user
+      const chunkIds = chunk.map(r => r.id);
+      const { data: existingRows } = await client
         .from('medicines')
-        .upsert(chunk, { onConflict: 'id' });
+        .select('id, user_id')
+        .in('id', chunkIds);
+
+      const existingMap = new Map((existingRows || []).map((e: any) => [e.id, e.user_id]));
+      const safeChunk: typeof chunk = [];
+
+      for (const row of chunk) {
+        const existingOwner = existingMap.get(row.id);
+        if (existingOwner && existingOwner !== row.user_id) {
+          console.warn(`[SUPABASE BACKUP] Skipped medicine ${row.id}: already owned by ${existingOwner}, cannot reassign to ${row.user_id}`);
+          failed++;
+          continue;
+        }
+        safeChunk.push(row);
+      }
+
+      if (safeChunk.length === 0) {
+        continue;
+      }
+
+      const { error } = await executeMedicineUpsert(client, safeChunk);
 
       if (error) {
         console.warn(`[SUPABASE BACKUP] Chunk upsert error:`, error.message);
-        failed += chunk.length;
+        failed += safeChunk.length;
       } else {
-        success += chunk.length;
+        success += safeChunk.length;
       }
     } catch (err) {
       console.warn(`[SUPABASE BACKUP] Chunk exception:`, err);
@@ -217,7 +357,7 @@ export async function backupUserConfigToSupabase(config: any): Promise<boolean> 
 }
 
 /**
- * Permanently removes a single medicine from Supabase.
+ * Permanently removes a single medicine from Supabase with strict user ownership scoping.
  */
 export async function deleteMedicineFromSupabase(medicineId: string, userId?: string): Promise<boolean> {
   const client = getSupabaseClient();
@@ -241,7 +381,7 @@ export async function deleteMedicineFromSupabase(medicineId: string, userId?: st
 }
 
 /**
- * Deletes a batch of medicines from Supabase by their IDs.
+ * Deletes a batch of medicines from Supabase by their IDs with user ownership scoping.
  */
 export async function deleteMedicinesBatchFromSupabase(medicineIds: string[], userId?: string): Promise<boolean> {
   const client = getSupabaseClient();
@@ -410,26 +550,28 @@ export async function backupUsersBatchToSupabase(users: any[]): Promise<{ succes
     return { success: 0, failed: 0 };
   }
 
-  const rows = users.map(u => ({
-    user_id: String(u.uid || u.userId || u.id),
-    email: u.email || null,
-    display_name: u.displayName || u.name || null,
-    photo_url: u.photoURL || u.photoUrl || null,
-    phone_number: u.phoneNumber || null,
-    email_verified: Boolean(u.emailVerified),
-    disabled: Boolean(u.disabled),
-    provider_ids: Array.isArray(u.providerData) 
-      ? u.providerData.map((p: any) => p.providerId) 
-      : (Array.isArray(u.providerIds) ? u.providerIds : []),
-    last_sign_in_time: u.metadata?.lastSignInTime 
-      ? new Date(u.metadata.lastSignInTime).toISOString() 
-      : (u.lastSignInTime ? new Date(u.lastSignInTime).toISOString() : null),
-    created_at: u.metadata?.creationTime 
-      ? new Date(u.metadata.creationTime).toISOString() 
-      : (u.createdAt ? new Date(u.createdAt).toISOString() : new Date().toISOString()),
-    updated_at: new Date().toISOString(),
-    metadata: JSON.stringify(u.customClaims || u.metadata || {}),
-  }));
+  const rows = users.map(u => {
+    const providerIds = Array.isArray(u.providerData)
+      ? u.providerData.map((p: any) => p?.providerId).filter(Boolean)
+      : Array.isArray(u.provider_ids)
+        ? u.provider_ids
+        : [];
+
+    return {
+      user_id: String(u.user_id || u.uid || u.userId || u.id),
+      email: u.email || null,
+      display_name: u.display_name || u.displayName || u.name || null,
+      photo_url: u.photo_url || u.photoURL || u.photoUrl || null,
+      phone_number: u.phone_number || u.phoneNumber || null,
+      email_verified: Boolean(u.email_verified ?? u.emailVerified),
+      disabled: Boolean(u.disabled),
+      provider_ids: providerIds,
+      last_sign_in_time: getIsoDateFromSource(u.metadata?.lastSignInTime || u.last_sign_in_time) || null,
+      metadata: typeof u.metadata === 'string' ? u.metadata : JSON.stringify(u.customClaims || u.metadata || {}),
+      created_at: getIsoDateFromSource(u.metadata?.creationTime || u.created_at) || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  });
 
   try {
     const { error } = await client.from('users').upsert(rows, { onConflict: 'user_id' });

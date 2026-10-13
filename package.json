@@ -9,7 +9,8 @@
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "secret-scan": "node scripts/secret-scan.mjs"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.2.1",

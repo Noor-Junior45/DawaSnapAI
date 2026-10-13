@@ -44,6 +44,18 @@ export async function initCrashReporting(): Promise<void> {
     try {
       const reason = event.reason;
       const errorMsg = reason instanceof Error ? reason.message : String(reason);
+
+      // Gracefully prevent unhandled rejection banners from Vite HMR websocket drops
+      if (
+        errorMsg.includes('WebSocket') ||
+        errorMsg.includes('websocket') ||
+        errorMsg.includes('closed without opened') ||
+        errorMsg.includes('failed to connect to websocket')
+      ) {
+        event.preventDefault();
+        return;
+      }
+
       console.warn('[Unhandled Rejection Shielded]:', errorMsg);
 
       if (isNative) {

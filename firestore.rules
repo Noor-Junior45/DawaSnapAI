@@ -5,22 +5,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuthenticated() &&
-        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          (request.auth.token.email == "newluckypharmacy@gmail.com" && request.auth.token.email_verified == true));
-    }
-
     function isValidEmail(email) {
       return email is string && email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
     }
 
     function isValidUserConfig(data) {
-      return data.keys().hasAll(['userId', 'email']) &&
+      return data.keys().hasAll(['userId']) &&
              data.keys().hasOnly(['userId', 'email', 'emailNotificationsEnabled', 'browserNotificationsEnabled', 'alertThreshold', 'accentColor', 'sortOrder', 'lowQuantityThreshold', 'theme']) &&
              data.userId == request.auth.uid &&
-             data.email == request.auth.token.email &&
-             isValidEmail(data.email) &&
+             (!('email' in data) || data.email == null || (data.email == request.auth.token.email && isValidEmail(data.email))) &&
              (!('emailNotificationsEnabled' in data) || data.emailNotificationsEnabled is bool) &&
              (!('browserNotificationsEnabled' in data) || data.browserNotificationsEnabled is bool) &&
              (!('alertThreshold' in data) || (data.alertThreshold is number && data.alertThreshold >= 0 && data.alertThreshold <= 365)) &&
@@ -156,20 +149,20 @@ service cloud.firestore {
 
     // Mail collection for email notifications
     match /mail/{mailId} {
-      allow read: if isAuthenticated() && (resource.data.to == request.auth.token.email || isAdmin());
+      allow read: if isAuthenticated() && resource.data.to == request.auth.token.email;
       allow create: if isAuthenticated() && request.auth.token.email_verified == true && isValidMail(request.resource.data);
-      allow update, delete: if isAdmin();
+      allow update, delete: if false;
     }
 
     // Medicines collection
     match /medicines/{medicineId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && isValidMedicine(request.resource.data) && request.resource.data.id == medicineId;
-      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin()) && isValidMedicine(request.resource.data) && request.resource.data.id == medicineId;
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidMedicine(request.resource.data) && request.resource.data.id == medicineId;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
 
       match /history/{historyId} {
-        allow read, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+        allow read, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
         allow create: if isAuthenticated() && isValidMedicineHistory(request.resource.data) && request.resource.data.medicineId == medicineId && get(/databases/$(database)/documents/medicines/$(medicineId)).data.userId == request.auth.uid;
         allow update: if false; // History is strictly immutable
       }
@@ -178,33 +171,41 @@ service cloud.firestore {
     // Single source of truth for user data and settings
     match /users/{userId} {
       match /settings/appSettings {
-        allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow read: if isAuthenticated() && request.auth.uid == userId;
         allow create, update: if isAuthenticated() && request.auth.uid == userId && isValidUserConfig(request.resource.data);
-        allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow delete: if isAuthenticated() && request.auth.uid == userId;
       }
 
       match /pushTokens/{tokenId} {
-        allow read, write, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow read, write: if isAuthenticated() && request.auth.uid == userId;
       }
 
       match /chats/{sessionId} {
-        allow read, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow read, delete: if isAuthenticated() && request.auth.uid == userId;
         allow create, update: if isAuthenticated() && request.auth.uid == userId && isValidChatSession(request.resource.data);
         
         match /messages/{messageId} {
-          allow read, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+          allow read, delete: if isAuthenticated() && request.auth.uid == userId;
           allow create, update: if isAuthenticated() && request.auth.uid == userId && isValidChatMessage(request.resource.data);
         }
       }
 
       match /slmKnowledge/{knowledgeId} {
-        allow read, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow read, delete: if isAuthenticated() && request.auth.uid == userId;
         allow create, update: if isAuthenticated() && request.auth.uid == userId && isValidSlmKnowledge(request.resource.data, userId);
+      }
+
+      match /dailyChatQuota/{quotaId} {
+        allow read, write, delete: if isAuthenticated() && request.auth.uid == userId;
       }
     }
 
     // Server-only internal collections: completely blocked from client SDKs (Server Admin SDK bypasses rules)
     match /server_chat_limits/{limitId} {
+      allow read, write: if false;
+    }
+
+    match /server_deletion_requests/{reqId} {
       allow read, write: if false;
     }
 
@@ -227,7 +228,7 @@ service cloud.firestore {
     // AI diagnostic reports
     match /aiReports/{reportId} {
       allow create: if isAuthenticated() && isValidAiReport(request.resource.data);
-      allow read, update, delete: if isAdmin();
+      allow read, update, delete: if false;
     }
   }
 }

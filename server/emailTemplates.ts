@@ -210,7 +210,60 @@ export function getExpiryEmailHTMLServer(
 }
 
 /**
- * Dispatches an email via Resend directly from the backend server
+ * Generates a clean, server-controlled HTML template for notifications and alerts.
+ * Strictly prevents client HTML injection.
+ */
+export function getGeneralNotificationHTMLServer(subject: string, messageText: string): string {
+  const safeSubject = (subject || "DawaSnap Alert").replace(/[<>&"']/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '"': return '&quot;';
+      case "'": return '&#39;';
+      default: return c;
+    }
+  });
+
+  const safeMessage = (messageText || "").replace(/[<>&"']/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '"': return '&quot;';
+      case "'": return '&#39;';
+      default: return c;
+    }
+  }).replace(/\n/g, '<br/>');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${safeSubject}</title>
+</head>
+<body style="margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b;">
+  <div style="max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+    <div style="background-color: #0f9d58; padding: 20px 24px; color: #ffffff;">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 700;">DawaSnap AI Safety Alerts</h2>
+    </div>
+    <div style="padding: 24px; font-size: 15px; line-height: 1.6;">
+      <h3 style="margin-top: 0; color: #0f172a; font-size: 16px; font-weight: 700;">${safeSubject}</h3>
+      <div style="color: #334155; margin-top: 12px;">${safeMessage}</div>
+      <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #64748b;">
+        <p style="margin: 0;">This is an automated safety advisory generated securely by DawaSnap AI.</p>
+        <p style="margin: 4px 0 0 0;">Never consume expired or degraded medications. Consult a licensed pharmacist or physician.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Dispatches an email via Resend directly from the backend server.
+ * Uses verified domain alerts@noorpos.in. Strictly excludes unverified third-party fallback.
  */
 export async function sendEmailDirectServer(to: string, subject: string, html: string, text: string) {
   let apiKey = process.env.RESEND_API_KEY;
@@ -235,20 +288,13 @@ export async function sendEmailDirectServer(to: string, subject: string, html: s
     });
 
     if (error) {
-      // Fallback domain
-      const fallbackResult = await resend.emails.send({
-        from: "DawaSnap AI <onboarding@resend.dev>",
-        to: [to],
-        subject,
-        text,
-        html
-      });
-      return { success: !fallbackResult.error, id: fallbackResult.data?.id };
+      console.warn("[RESEND ERROR]", error);
+      return { success: false, error: error.message };
     }
 
     return { success: true, id: data?.id };
-  } catch (err) {
+  } catch (err: any) {
     console.error("[BACKGROUND EMAIL ERROR]", err);
-    return { success: false, error: err };
+    return { success: false, error: err?.message || String(err) };
   }
 }

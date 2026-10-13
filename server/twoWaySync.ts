@@ -9,7 +9,8 @@ import {
   fetchMedicinesFromSupabase,
   getPersistentSyncState,
   setPersistentSyncState,
-  isSupabaseConfigured 
+  isSupabaseConfigured,
+  getSupabaseClient
 } from './supabaseBackup.ts';
 import { getAdminApp, hasServiceAccountConfigured } from './firebaseAdmin.ts';
 
@@ -92,30 +93,57 @@ export async function pushFirestoreToSupabase(): Promise<{
         const result = await backupMedicinesBatchToSupabase(medsToPush);
         medCount = result.success;
       }
+      // Propagate deletions: verify active medicines and reconcile soft-deletes
+      try {
+        const activeFirestoreIds = new Set(medSnap.docs.filter(d => !d.data()?.isDeleted).map(d => d.id));
+        const supabaseActiveRows = await fetchMedicinesFromSupabase();
+        const toDeleteInSupabase: string[] = [];
+        for (const row of supabaseActiveRows) {
+          if (!row.is_deleted && !activeFirestoreIds.has(row.id)) {
+            toDeleteInSupabase.push(row.id);
+          }
+        }
+        if (toDeleteInSupabase.length > 0) {
+          const client = getSupabaseClient();
+          if (client) {
+            await client
+              .from('medicines')
+              .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+              .in('id', toDeleteInSupabase);
+          }
+        }
+      } catch (delErr: any) {
+        console.warn('[FIRESTORE->SUPABASE] Notice propagating deletions:', delErr.message);
+      }
     } catch (err: any) {
       console.warn('[FIRESTORE->SUPABASE] Error reading/pushing medicines:', err.message);
     }
 
-    // 2. User Configs Push (users/{uid}/settings/appSettings unified location)
+    // 2. User Configs Push (read from users/{uid}/settings/appSettings via collectionGroup('settings'))
     try {
-      const usersSnap = await db.collection('users').get();
-      const configDocRefs = usersSnap.docs.map(u => db.doc(`users/${u.id}/settings/appSettings`));
-      
-      if (configDocRefs.length > 0) {
-        // Use db.getAll() instead of per-doc awaits
-        const configSnaps = await db.getAll(...configDocRefs);
-        for (const snap of configSnaps) {
-          if (snap.exists) {
-            const data = snap.data() || {};
-            const userId = snap.ref.parent.parent?.id || data.userId;
-            const configData = { userId, ...data };
-            const ok = await backupUserConfigToSupabase(configData);
-            if (ok) configCount++;
+      const settingsSnap = await db.collectionGroup('settings').get();
+      for (const d of settingsSnap.docs) {
+        if (d.id === 'appSettings') {
+          const data = d.data() || {};
+          const userId = d.ref.parent.parent?.id || data.userId;
+          if (userId) {
+            let docUpdatedMs = 0;
+            if (typeof data.updatedAt === 'number') {
+              docUpdatedMs = data.updatedAt;
+            } else if (data.updatedAt?.toMillis) {
+              docUpdatedMs = data.updatedAt.toMillis();
+            }
+
+            if (persistentLastSync === 0 || docUpdatedMs >= persistentLastSync) {
+              const configData = { userId, ...data };
+              const ok = await backupUserConfigToSupabase(configData);
+              if (ok) configCount++;
+            }
           }
         }
       }
     } catch (err: any) {
-      console.warn('[FIRESTORE->SUPABASE] Error pushing configs:', err.message);
+      console.warn('[FIRESTORE->SUPABASE] Error pushing configs via collectionGroup:', err.message);
     }
 
     // 3. User Accounts & Profiles Push (Paginated listUsers with nextPageToken)

@@ -2,7 +2,6 @@ import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
 import { sendEmailDirectServer, getExpiryEmailHTMLServer, type ExpiryStage } from "./emailTemplates.ts";
 import { getAdminApp, hasServiceAccountConfigured } from "./firebaseAdmin.ts";
-import { getMessaging } from 'firebase-admin/messaging';
 
 let cachedDb: Firestore | null = null;
 
@@ -36,116 +35,10 @@ export interface UserExpirySchedule {
 
 // In-memory fallback cache
 const memorySchedules = new Map<string, UserExpirySchedule>();
-// In-memory registered tokens map: userId -> Set of tokens
-const userPushTokens = new Map<string, Set<string>>();
 
 // Mutex lock and in-flight tracking to strictly prevent duplicate email dispatches
 let isCheckRunning = false;
 const inFlightAlerts = new Set<string>();
-
-/**
- * Registers a browser/device push token for a user.
- */
-export async function registerPushToken(
-  userId: string, 
-  token: string, 
-  platform: string = 'web'
-): Promise<void> {
-  if (!userPushTokens.has(userId)) {
-    userPushTokens.set(userId, new Set());
-  }
-  userPushTokens.get(userId)!.add(token);
-
-  try {
-    const db = getAdminDb();
-    const tokenId = `token_${token.slice(-16).replace(/[^a-zA-Z0-9]/g, '_')}`;
-    await db.collection('users').doc(userId).collection('pushTokens').doc(tokenId).set({
-      token,
-      platform,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-    console.log(`[PUSH TOKEN] Registered ${platform} token for user ${userId}`);
-  } catch (err) {
-    console.warn('[PUSH TOKEN WARNING] Firestore save warning:', err);
-  }
-}
-
-/**
- * Sends a push notification to all active devices registered for a user.
- */
-export async function sendPushNotificationToUser(
-  userId: string, 
-  title: string, 
-  body: string, 
-  data: Record<string, any> = {}
-): Promise<{ sent: number; error?: string }> {
-  const tokens = new Set<string>(userPushTokens.get(userId) || []);
-
-  try {
-    const db = getAdminDb();
-    const snap = await db.collection('users').doc(userId).collection('pushTokens').get();
-    snap.forEach(d => {
-      const dData = d.data();
-      if (dData.token) {
-        tokens.add(dData.token);
-      }
-    });
-  } catch {
-    // Non-fatal fallback
-  }
-
-  if (tokens.size === 0) {
-    return { sent: 0 };
-  }
-
-  if (!hasServiceAccountConfigured()) {
-    const err = 'FIREBASE_SERVICE_ACCOUNT_KEY is required in environment variables for FCM HTTP v1 push notifications.';
-    console.warn(`[FCM HTTP v1 WARNING] ${err}`);
-    return { sent: 0, error: err };
-  }
-
-  try {
-    const adminApp = getAdminApp();
-    const messaging = getMessaging(adminApp);
-    const tokenArray = Array.from(tokens);
-    const serializedData: Record<string, string> = {
-      title,
-      body,
-    };
-    for (const [key, value] of Object.entries(data)) {
-      serializedData[key] = typeof value === 'string' ? value : JSON.stringify(value);
-    }
-
-    const response = await messaging.sendEachForMulticast({
-      tokens: tokenArray,
-      notification: {
-        title,
-        body,
-      },
-      data: serializedData,
-      android: {
-        priority: 'high',
-        notification: {
-          icon: 'ic_launcher',
-          color: '#0f9d58',
-          sound: 'default',
-        }
-      },
-      webpush: {
-        notification: {
-          icon: '/logo.png',
-          badge: '/logo.png',
-        }
-      }
-    });
-
-    console.log(`[FCM HTTP v1] Dispatched push to user ${userId}: ${response.successCount} succeeded, ${response.failureCount} failed.`);
-    return { sent: response.successCount };
-  } catch (err: any) {
-    console.error(`[FCM HTTP v1 ERROR] Push dispatch exception:`, err);
-    return { sent: 0, error: err.message || String(err) };
-  }
-}
 
 /**
  * Registers or updates a user's active medicine schedule in Firestore and memory.
@@ -168,9 +61,13 @@ export async function registerUserExpirySchedule(
   memorySchedules.set(userId, schedule);
 
   try {
-    const db = getAdminDb();
-    await db.collection('server_expiry_schedules').doc(userId).set(schedule);
-    console.log(`[EXPIRY SYNC] Successfully registered ${schedule.medicines.length} medicine(s) for user ${email}`);
+    if (hasServiceAccountConfigured()) {
+      const db = getAdminDb();
+      await db.collection('server_expiry_schedules').doc(userId).set(schedule);
+      console.log(`[EXPIRY SYNC] Successfully registered ${schedule.medicines.length} medicine(s) for user ${email}`);
+    } else {
+      console.log(`[EXPIRY SYNC] Service account not configured in environment; schedule for ${email} (${schedule.medicines.length} meds) held safely in memory.`);
+    }
   } catch (err) {
     console.warn(`[EXPIRY SYNC WARNING] Could not persist schedule to Firestore, kept in memory:`, err);
   }
@@ -205,19 +102,21 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
       schedulesToProcess.set(uid, sched);
     }
 
-    // Load from Firestore server_expiry_schedules using Admin SDK
-    try {
-      const db = getAdminDb();
-      const snap = await db.collection('server_expiry_schedules').get();
-      snap.forEach(docSnap => {
-        const data = docSnap.data() as UserExpirySchedule;
-        if (data && data.userId && data.email) {
-          schedulesToProcess.set(data.userId, data);
-          memorySchedules.set(data.userId, data);
-        }
-      });
-    } catch (fsErr) {
-      console.warn("[BACKGROUND EXPIRY] Failed to query server_expiry_schedules from Firestore, using memory:", fsErr);
+    // Load from Firestore server_expiry_schedules using Admin SDK if service account configured
+    if (hasServiceAccountConfigured()) {
+      try {
+        const db = getAdminDb();
+        const snap = await db.collection('server_expiry_schedules').get();
+        snap.forEach(docSnap => {
+          const data = docSnap.data() as UserExpirySchedule;
+          if (data && data.userId && data.email) {
+            schedulesToProcess.set(data.userId, data);
+            memorySchedules.set(data.userId, data);
+          }
+        });
+      } catch (fsErr) {
+        console.warn("[BACKGROUND EXPIRY] Failed to query server_expiry_schedules from Firestore, using memory:", fsErr);
+      }
     }
 
     if (schedulesToProcess.size === 0) {
@@ -326,19 +225,31 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
           await sendEmailDirectServer(schedule.email, subject, html, text);
           totalSent++;
 
-          // Also dispatch Firebase Cloud Message / Push Notification to registered browser & mobile devices
-          try {
-            const pushRes = await sendPushNotificationToUser(
-              schedule.userId,
-              subject,
-              text,
-              { medicineId: m.id, stage: stageToSend, name: m.name, expirationDate: m.expirationDate }
-            );
-            if (pushRes.sent > 0) {
-              console.log(`[BACKGROUND EXPIRY CRON] Sent push notification to ${pushRes.sent} device(s) for user ${schedule.userId}`);
+          // Also dispatch Firebase Cloud Message (FCM) push notification to all user's registered devices
+          if (hasServiceAccountConfigured()) {
+            try {
+              const { getMessaging } = await import('firebase-admin/messaging');
+              const tokensSnap = await db.collection('users').doc(schedule.userId).collection('pushTokens').get();
+              const tokens = tokensSnap.docs.map(d => d.data().token).filter(Boolean);
+              if (tokens.length > 0) {
+                const messaging = getMessaging(getAdminApp());
+                await messaging.sendEachForMulticast({
+                  tokens,
+                  notification: {
+                    title: subject,
+                    body: text,
+                  },
+                  data: {
+                    medicineId: m.id,
+                    stage: stageToSend,
+                    expirationDate: m.expirationDate,
+                  },
+                });
+                console.log(`[BACKGROUND EXPIRY CRON] Dispatched FCM push notification to ${tokens.length} device(s) for ${schedule.email}`);
+              }
+            } catch (fcmErr) {
+              console.warn('[BACKGROUND EXPIRY CRON] FCM push notice:', fcmErr);
             }
-          } catch (pushErr) {
-            console.warn('[BACKGROUND EXPIRY CRON] Push notification warning:', pushErr);
           }
 
           // Finalize permanently sent in Firestore
@@ -391,7 +302,6 @@ export function startExpiryCron(): void {
  */
 export async function purgeUserServerData(userId: string): Promise<void> {
   memorySchedules.delete(userId);
-  userPushTokens.delete(userId);
 
   try {
     const db = getAdminDb();

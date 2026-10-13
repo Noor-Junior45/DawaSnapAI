@@ -24,14 +24,6 @@ import {
   serverTimestamp, reauthenticateWithPopup, reauthenticateWithCredential, GoogleAuthProvider, getAuthHeader
 } from './firebase';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { 
-  isBrowserNotificationSupported, 
-  requestBrowserNotificationPermission, 
-  checkAndTriggerBrowserExpiryNotifications, 
-  showBrowserNotification,
-  registerBrowserPushTokenWithServer 
-} from './services/browserNotificationService';
-
 import { DoctorLogo } from './components/DoctorLogo';
 import { MedicineDetailsPage } from './components/MedicineDetailsPage';
 import { MedicineHistoryPage } from './components/MedicineHistoryPage';
@@ -52,10 +44,7 @@ import { signInWithGoogleAdaptive, signOutAdaptive } from './services/nativeAuth
 import { setCrashReportingUser } from './services/crashReportingService';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { PushNotifications } from '@capacitor/push-notifications';
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { initNativePerformance, setNativeBackButtonHandler } from './services/nativePerformanceService';
-import { initNativeNotifications, scheduleNativeMedicineAlerts } from './services/nativeNotificationService';
 import { showBannerAd, hideBannerAd, onBannerHeightChange } from './services/admobService';
 import { useEdgeSwipeBack, usePullToRefresh } from './utils/mobileGestures';
 import { getApiUrl } from './utils/apiConfig';
@@ -122,7 +111,6 @@ export default function App() {
   const [lowQuantityThreshold, setLowQuantityThreshold] = useState(5);
   const [accentColor, setAccentColor] = useState('#f97316');
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(false);
-  const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [isLikedOnly, setIsLikedOnly] = useState<boolean>(false);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
@@ -256,27 +244,56 @@ export default function App() {
     }
   }, [isMainDashboardActive]);
 
-  // Auth State Listener with safety timeout to prevent app launch freezing
+  // Auth State Listener with intelligent session preservation to eliminate login screen flashing on cold boot
   useEffect(() => {
     let resolved = false;
+    const isNative = Capacitor.isNativePlatform();
+    const hasPreviousSession = typeof window !== 'undefined' && localStorage.getItem('dawasnap_has_auth_session') === 'true';
 
-    // Timeout fallback: if Firebase Auth takes > 1200ms on cold mobile boot, unblock UI so login screen displays
+    // On native Android, query plugin immediately to prevent any auth handshake lag
+    if (isNative) {
+      import('@capacitor-firebase/authentication').then(({ FirebaseAuthentication }) => {
+        FirebaseAuthentication.getCurrentUser().then((res) => {
+          if (res?.user && !resolved) {
+            try {
+              localStorage.setItem('dawasnap_has_auth_session', 'true');
+            } catch {}
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
+    // Safety timeout: 3500ms on native / returning users to allow Android IndexedDB to hydrate,
+    // or 1200ms on clean web guest visits
+    const fallbackDuration = (isNative || hasPreviousSession) ? 3500 : 1200;
     const fallbackTimer = setTimeout(() => {
       if (!resolved) {
+        resolved = true;
         setIsAuthReady(true);
-        if (Capacitor.isNativePlatform()) {
+        if (isNative) {
           SplashScreen.hide().catch(() => {});
         }
       }
-    }, 1200);
+    }, fallbackDuration);
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       resolved = true;
       clearTimeout(fallbackTimer);
       setUser(currentUser);
       setIsAuthReady(true);
-      setCrashReportingUser(currentUser ? currentUser.uid : null);
-      if (Capacitor.isNativePlatform()) {
+      setIsGoogleLoggingIn(false);
+      if (currentUser) {
+        try {
+          localStorage.setItem('dawasnap_has_auth_session', 'true');
+        } catch {}
+        setCrashReportingUser(currentUser.uid);
+      } else {
+        try {
+          localStorage.removeItem('dawasnap_has_auth_session');
+        } catch {}
+        setCrashReportingUser(null);
+      }
+      if (isNative) {
         SplashScreen.hide().catch(() => {});
       }
     });
@@ -508,7 +525,6 @@ export default function App() {
     if (!user) return;
 
     const configRef = doc(db, 'users', user.uid, 'settings', 'appSettings');
-    const legacyConfigRef = doc(db, 'userConfigs', user.uid);
     const unsubscribe = onSnapshot(configRef, async (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
@@ -516,37 +532,22 @@ export default function App() {
         if (data.lowQuantityThreshold !== undefined) setLowQuantityThreshold(data.lowQuantityThreshold);
         if (data.accentColor) setAccentColor(data.accentColor);
         if (data.emailNotificationsEnabled !== undefined) setEmailNotificationsEnabled(data.emailNotificationsEnabled);
-        if (data.browserNotificationsEnabled !== undefined) setBrowserNotificationsEnabled(data.browserNotificationsEnabled);
         if (data.sortOrder) setSortOrder(data.sortOrder);
         if (data.theme) setTheme(data.theme);
       } else {
-        // Check if legacy userConfigs doc exists to migrate seamlessly
-        let legacyData: any = null;
-        try {
-          const legSnap = await getDoc(legacyConfigRef);
-          if (legSnap.exists()) {
-            legacyData = legSnap.data();
-          }
-        } catch {
-          // Ignore legacy read error
-        }
-
-        if (user.email) {
-          const initialConfig = {
-            userId: user.uid,
-            email: user.email,
-            emailNotificationsEnabled: legacyData?.emailNotificationsEnabled ?? false,
-            browserNotificationsEnabled: legacyData?.browserNotificationsEnabled ?? false,
-            alertThreshold: legacyData?.alertThreshold ?? 90,
-            lowQuantityThreshold: legacyData?.lowQuantityThreshold ?? 5,
-            accentColor: legacyData?.accentColor ?? '#f97316',
-            sortOrder: legacyData?.sortOrder ?? 'default',
-            theme: legacyData?.theme ?? 'system'
-          };
-          setDoc(configRef, initialConfig).catch(err => {
-            console.warn('Initial appSettings creation deferred:', err);
-          });
-        }
+        const initialConfig = {
+          userId: user.uid,
+          email: user.email || null,
+          emailNotificationsEnabled: false,
+          alertThreshold: 90,
+          lowQuantityThreshold: 5,
+          accentColor: '#f97316',
+          sortOrder: 'default',
+          theme: 'system'
+        };
+        setDoc(configRef, initialConfig).catch(err => {
+          console.warn('Initial appSettings creation deferred:', err);
+        });
       }
     }, (error) => {
       console.warn('appSettings snapshot notice (offline/reconnecting):', error);
@@ -584,60 +585,12 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
-  // Native Android Closed-App Notifications Setup
-  // Requests Android POST_NOTIFICATIONS permission, creates notification channels, and syncs toggle & FCM token
-  useEffect(() => {
-    const setupNative = async () => {
-      if (Capacitor.isNativePlatform()) {
-        try {
-          const granted = await initNativeNotifications();
-          if (granted) {
-            setBrowserNotificationsEnabled(true);
-            if (user?.uid) {
-              handleUpdateConfig({ browserNotificationsEnabled: true });
-              // Sync cached FCM token to backend / Firestore if available
-              const cachedFcmToken = localStorage.getItem('dawasnap_fcm_token');
-              if (cachedFcmToken) {
-                registerBrowserPushTokenWithServer(user.uid, cachedFcmToken).catch(() => {});
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('Native init notice:', e);
-        }
-      }
-    };
-    setupNative();
-  }, [user]);
-
-  // Synchronize scheduled local notifications for medicine expiry dates
-  // Ensures heads-up reminders appear on user's phone even when the app is closed
-  useEffect(() => {
-    if (medicines.length > 0 && Capacitor.isNativePlatform()) {
-      scheduleNativeMedicineAlerts(medicines, alertThreshold);
-    }
-  }, [medicines, alertThreshold]);
-
-  // Background Notification Check (Browser and Email)
+  // Background Email Expiry Schedule Synchronization
   useEffect(() => {
     if (medicines.length === 0) return;
 
     const checkAndNotify = async () => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0];
-
-      // 1. Browser & Chrome Notification Alert
-      if (browserNotificationsEnabled && isBrowserNotificationSupported()) {
-        checkAndTriggerBrowserExpiryNotifications(medicines, alertThreshold).catch(err => {
-          console.warn('Browser notification check warning:', err);
-        });
-      }
-
-      // 2. Synchronize active medicine expiry schedule with the backend server.
-      // The backend cron worker runs 24/7 in the background on Render and is responsible
-      // for dispatching expiry emails ONCE per stage while the app is closed.
-      // Opening the app on 1, 2, or more devices will NEVER trigger duplicate emails!
+      // Synchronize active medicine expiry schedule with the backend server for email alerts.
       if (user?.uid && user?.email) {
         syncExpiryScheduleWithServer(
           user.uid,
@@ -653,7 +606,7 @@ export default function App() {
     checkAndNotify();
 
     return () => clearInterval(interval);
-  }, [medicines, browserNotificationsEnabled, emailNotificationsEnabled, alertThreshold, lowQuantityThreshold, user]);
+  }, [medicines, emailNotificationsEnabled, alertThreshold, lowQuantityThreshold, user]);
 
   useEffect(() => {
     const applyThemeAndAccent = () => {
@@ -668,160 +621,6 @@ export default function App() {
     applyThemeAndAccent();
   }, [accentColor]);
 
-  // Synchronize Notifications toggle state with Android / OS system notification permission
-  useEffect(() => {
-    const syncNotificationPermissionWithSystem = async () => {
-      if (Capacitor.isNativePlatform()) {
-        try {
-          let isGranted = false;
-          let isDenied = false;
-
-          if (Capacitor.isPluginAvailable('LocalNotifications')) {
-            const localPerm = await LocalNotifications.checkPermissions().catch(() => null);
-            if (localPerm?.display === 'granted') isGranted = true;
-            if (localPerm?.display === 'denied') isDenied = true;
-          }
-
-          if (Capacitor.isPluginAvailable('PushNotifications')) {
-            const pushPerm = await PushNotifications.checkPermissions().catch(() => null);
-            if (pushPerm?.receive === 'granted') isGranted = true;
-            if (pushPerm?.receive === 'denied') isDenied = true;
-          }
-
-          if (isGranted) {
-            setBrowserNotificationsEnabled(true);
-            if (user?.uid) {
-              handleUpdateConfig({ browserNotificationsEnabled: true });
-            }
-          } else if (isDenied) {
-            setBrowserNotificationsEnabled(false);
-            if (user?.uid) {
-              handleUpdateConfig({ browserNotificationsEnabled: false });
-            }
-          }
-          return;
-        } catch (e) {
-          console.warn('Native permission sync notice:', e);
-        }
-      }
-
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        try {
-          if (Notification.permission === 'denied') {
-            // If closed in phone settings, show closed/off in the app
-            setBrowserNotificationsEnabled(false);
-          } else if (Notification.permission === 'granted') {
-            // If allowed in phone settings, show on in the app
-            setBrowserNotificationsEnabled(true);
-          }
-        } catch {}
-      }
-    };
-
-    // Run on mount
-    syncNotificationPermissionWithSystem();
-
-    // Check whenever user switches between Android settings and the app
-    window.addEventListener('focus', syncNotificationPermissionWithSystem);
-    document.addEventListener('visibilitychange', syncNotificationPermissionWithSystem);
-
-    // Listen to Permissions API change event if supported (Chrome on Android & desktop)
-    let permStatus: PermissionStatus | null = null;
-    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({ name: 'notifications' as PermissionName }).then((status) => {
-        permStatus = status;
-        const onPermChange = () => {
-          if (status.state === 'denied') {
-            setBrowserNotificationsEnabled(false);
-            if (user?.uid) {
-              handleUpdateConfig({ browserNotificationsEnabled: false });
-            }
-          } else if (status.state === 'granted') {
-            setBrowserNotificationsEnabled(true);
-            if (user?.uid) {
-              handleUpdateConfig({ browserNotificationsEnabled: true });
-            }
-          }
-        };
-        status.addEventListener('change', onPermChange);
-      }).catch(() => {});
-    }
-
-    return () => {
-      window.removeEventListener('focus', syncNotificationPermissionWithSystem);
-      document.removeEventListener('visibilitychange', syncNotificationPermissionWithSystem);
-      if (permStatus) {
-        permStatus.onchange = null;
-      }
-    };
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (user) {
-      const hasNotification = typeof window !== 'undefined' && 'Notification' in window && typeof Notification !== 'undefined';
-
-      // Check for expiring medicines and notify
-      const checkExpiring = () => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        medicines.forEach(med => {
-          if (med.taken || med.isDeleted) return;
-          
-          const [year, month, day] = med.expirationDate.split('-').map(Number);
-          const expiry = new Date(year, month - 1, day);
-          expiry.setHours(0, 0, 0, 0);
-          
-          const diffTime = expiry.getTime() - today.getTime();
-          const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-          
-          if (diffDays >= 0 && diffDays <= 7) {
-            let isPermGranted = false;
-            try {
-              isPermGranted = hasNotification && Notification.permission === 'granted';
-            } catch {}
-            if (isPermGranted) {
-              try {
-                if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
-                  navigator.serviceWorker.ready.then(reg => {
-                    reg.showNotification('Medicine Expiring Soon', {
-                      body: `${med.name} expires in ${diffDays} days.`,
-                      icon: '/favicon.ico'
-                    });
-                  }).catch(() => {
-                    try {
-                      new window.Notification('Medicine Expiring Soon', {
-                        body: `${med.name} expires in ${diffDays} days.`,
-                        icon: '/favicon.ico'
-                      });
-                    } catch (e) {}
-                  });
-                } else {
-                  new window.Notification('Medicine Expiring Soon', {
-                    body: `${med.name} expires in ${diffDays} days.`,
-                    icon: '/favicon.ico'
-                  });
-                }
-              } catch (e) {
-                console.warn('Notification not supported:', e);
-              }
-            }
-          }
-        });
-      };
-
-      // Run check once on load after medicines are fetched
-      if (medicines.length > 0) {
-        const lastCheck = localStorage.getItem('lastExpiryCheck');
-        const todayStr = new Date().toDateString();
-        if (lastCheck !== todayStr) {
-          checkExpiring();
-          localStorage.setItem('lastExpiryCheck', todayStr);
-        }
-      }
-    }
-  }, [user, medicines]);
-
   const handleLogin = async () => {
     setIsGoogleLoggingIn(true);
     try {
@@ -832,19 +631,17 @@ export default function App() {
         }
         trackEvent('login', { method: 'google' });
       } else if (!res.isCancelled) {
-        setIsGoogleLoggingIn(false);
         setAlertMessage(res.error || 'Failed to sign in with Google. Please try again.');
-      } else {
-        setIsGoogleLoggingIn(false);
       }
     } catch (error: any) {
-      setIsGoogleLoggingIn(false);
       if (error.code === 'auth/popup-closed-by-user') {
         // Silently handle popup closure
         return;
       }
       console.error("Login Error:", error);
       setAlertMessage('Failed to sign in with Google. Please try again.');
+    } finally {
+      setIsGoogleLoggingIn(false);
     }
   };
 
@@ -921,6 +718,14 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
+      try {
+        localStorage.removeItem('dawasnap_has_auth_session');
+      } catch {}
+      setIsGoogleLoggingIn(false);
+      setShowAuthScreen(false);
+      try {
+        window.history.pushState(null, '', '/');
+      } catch {}
       await signOutAdaptive();
       trackEvent('logout');
       // Reset UI states on logout
@@ -934,6 +739,8 @@ export default function App() {
       setActiveFooterModal(null);
     } catch (error) {
       console.error("Logout Error:", error);
+    } finally {
+      setIsGoogleLoggingIn(false);
     }
   };
 
@@ -2061,8 +1868,16 @@ export default function App() {
 
   if (!isAuthReady) {
     return (
-      <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-[#e3e2e0] border-t-[#0f9d58] rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#faf8f5] flex flex-col items-center justify-center p-6 select-none animate-fadeIn">
+        <div className="w-16 h-16 rounded-2xl bg-[#0f9d58] flex items-center justify-center shadow-lg shadow-[#0f9d58]/20 mb-4 animate-pulse">
+          <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </svg>
+        </div>
+        <div className="flex items-center gap-2 text-stone-500 font-medium text-xs tracking-wide">
+          <div className="w-3.5 h-3.5 border-2 border-stone-300 border-t-[#0f9d58] rounded-full animate-spin" />
+          <span>Restoring session...</span>
+        </div>
       </div>
     );
   }
@@ -2645,55 +2460,6 @@ export default function App() {
               </div>
             </motion.div>
           )}
-
-          {/* Google Sign-In Active Syncing Overlay Animation */}
-          {isGoogleLoggingIn && (
-            <motion.div
-              key="auth-google-syncing"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/45 backdrop-blur-md"
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                className="w-full max-w-xs bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-3xl p-6 text-center shadow-2xl flex flex-col items-center"
-              >
-                {/* Pulsing Google Multi-Color Ambient Ring */}
-                <div className="relative w-16 h-16 flex items-center justify-center mb-4">
-                  <div className="absolute inset-0 rounded-full border-4 border-[#0f9d58]/20 animate-ping opacity-60" />
-                  <div className="absolute inset-0 rounded-full border-3 border-transparent border-t-[#4285F4] border-r-[#EA4335] border-b-[#FBBC05] border-l-[#34A853] animate-spin" />
-                  <div className="w-10 h-10 bg-white rounded-full shadow-xs flex items-center justify-center z-10">
-                    <img
-                      src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-                      alt="Google"
-                      className="w-5 h-5"
-                    />
-                  </div>
-                </div>
-
-                <h3 className="text-base font-black text-slate-800 tracking-tight mb-1">
-                  Signing In with Google
-                </h3>
-                <p className="text-xs text-slate-500 font-medium leading-relaxed mb-4">
-                  Synchronizing health vault &amp; profile...
-                </p>
-
-                {/* Smooth Animated Loading Bar */}
-                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                  <motion.div
-                    className="h-full bg-linear-to-r from-[#4285F4] via-[#34A853] to-[#FBBC05]"
-                    initial={{ x: "-100%" }}
-                    animate={{ x: "100%" }}
-                    transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
-                  />
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
         </AnimatePresence>
       </div>
     );
@@ -3166,22 +2932,6 @@ export default function App() {
               setAccentColor={(val) => handleUpdateConfig({ accentColor: val })}
               emailNotificationsEnabled={emailNotificationsEnabled}
               setEmailNotificationsEnabled={(val) => handleUpdateConfig({ emailNotificationsEnabled: val })}
-              browserNotificationsEnabled={browserNotificationsEnabled}
-              setBrowserNotificationsEnabled={async (val) => {
-                setBrowserNotificationsEnabled(val);
-                handleUpdateConfig({ browserNotificationsEnabled: val });
-
-                if (val) {
-                  if (Capacitor.isNativePlatform()) {
-                    scheduleNativeMedicineAlerts(medicines, alertThreshold).catch(() => {});
-                  } else {
-                    checkAndTriggerBrowserExpiryNotifications(medicines, alertThreshold).catch(() => {});
-                    if (user?.uid) {
-                      registerBrowserPushTokenWithServer(user.uid, `web_${user.uid}`).catch(() => {});
-                    }
-                  }
-                }
-              }}
               photoURL={user?.photoURL || undefined}
               userEmail={user.email || ''}
               onLogout={handleLogout}
