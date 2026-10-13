@@ -4,21 +4,6 @@ DawaSnap AI is a privacy-first medication management platform and prescription s
 
 ---
 
-## 📖 Claude & External Database Integrations
-
-If you are **Claude**, an AI agent, or an external engineer working with the **Supabase** backend, read the comprehensive integration specification before modifying data:
-
-👉 **[`FIREBASE_SUPABASE_INTEGRATION_SPEC.md`](./FIREBASE_SUPABASE_INTEGRATION_SPEC.md)**
-
-This document details:
-- Firestore Document Paths ⇄ Supabase PostgreSQL Table Mappings
-- Field conversions (camelCase vs. snake_case, ISO timestamps vs. Epoch milliseconds)
-- Primary keys and user scoping (`user_id` / `userId`)
-- Strict validation rules required when writing to Supabase so that data syncs cleanly back into Firebase Firestore
-- Synchronization endpoints (`/api/backup/pull-from-supabase`, `/api/backup/two-way-sync`)
-
----
-
 ## 🛠 Tech Stack
 
 - **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Lucide Icons, Motion
