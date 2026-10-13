@@ -28,7 +28,7 @@ service cloud.firestore {
              data.keys().hasOnly([
                'id', 'name', 'dosage', 'expirationDate', 'userId', 'createdAt', 'updatedAt', 
                'usageInstructions', 'imageUrl', 'taken', 'quantity', 
-               'isDeleted', 'deletedAt', 'form', 'schedule', 'liked', 'isEncrypted', 'ivMap', 
+               'isDeleted', 'deletedAt', 'form', 'schedule', 'liked', 
                'enableLowStockAlert', 'lowStockThreshold', 'enableEmailExpiryAlert', 'enableEmailLowStockAlert', 
                'category', 'categories', 'tags', 'notes', 'barcode', 'mfgDate', 'manufacturer', 
                'price', 'groupKey', 'totalQuantity', 'batchId', 'batchCount', 'batches', 
@@ -74,9 +74,7 @@ service cloud.firestore {
              (!('enableLowStockAlert' in data) || data.enableLowStockAlert is bool) &&
              (!('lowStockThreshold' in data) || data.lowStockThreshold == null || (data.lowStockThreshold is number && data.lowStockThreshold >= 0)) &&
              (!('enableEmailExpiryAlert' in data) || data.enableEmailExpiryAlert is bool) &&
-             (!('enableEmailLowStockAlert' in data) || data.enableEmailLowStockAlert is bool) &&
-             (!('isEncrypted' in data) || data.isEncrypted is bool) &&
-             (!('ivMap' in data) || data.ivMap is map);
+             (!('enableEmailLowStockAlert' in data) || data.enableEmailLowStockAlert is bool);
     }
 
     function isValidMedicineHistory(data) {

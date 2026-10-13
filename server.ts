@@ -44,7 +44,7 @@ import {
   isSupabaseConfigured,
   testSupabaseConnection
 } from "./server/supabaseBackup.ts";
-import { runTwoWaySync, pullSupabaseToFirebase } from "./server/twoWaySync.ts";
+import { runTwoWaySync, pullSupabaseToFirebase, restoreMissingFromSupabase } from "./server/twoWaySync.ts";
 import { getGeneralNotificationHTMLServer } from "./server/emailTemplates.ts";
 
 // Initialize Firebase Admin on startup
@@ -207,14 +207,12 @@ const strictPublicFormRateLimiter = createRateLimiter(6, 2);
 const authenticatedUidLimiter = createUidRateLimiter(30, 10);
 const sensitiveAuthActionLimiter = createUidRateLimiter(10, 3);
 
-// Timing-safe CRON_SECRET validator
+// Timing-safe CRON_SECRET validator (Header x-cron-secret only; query parameters forbidden)
 function verifyCronAuth(req: express.Request): boolean {
   const cronSecret = process.env.CRON_SECRET?.trim();
   if (!cronSecret) return false;
 
-  const headerVal = req.headers['x-cron-secret'] || 
-    (typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
-
+  const headerVal = req.headers['x-cron-secret'];
   if (typeof headerVal !== 'string') return false;
 
   const expectedBuf = Buffer.from(cronSecret);
@@ -985,8 +983,32 @@ app.post("/api/backup/supabase/sync-history", requireFirebaseAuth, authenticated
   }
 });
 
-// Supabase Status check endpoint
+// Supabase Status check endpoint (Requires valid Firebase Auth Bearer token OR CRON_SECRET header)
 app.get("/api/backup/supabase/status", async (req, res) => {
+  const isCronAuthed = verifyCronAuth(req);
+  let isUserAuthed = false;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      try {
+        const { getAuth } = await import("firebase-admin/auth");
+        const adminApp = getAdminApp();
+        if (hasServiceAccountConfigured()) {
+          await getAuth(adminApp).verifyIdToken(token);
+          isUserAuthed = true;
+        }
+      } catch {
+        // Token invalid or expired
+      }
+    }
+  }
+
+  if (!isCronAuthed && !isUserAuthed) {
+    return res.status(401).json({ error: "Unauthorized: Valid Firebase auth Bearer token or x-cron-secret header is required." });
+  }
+
   try {
     const configured = isSupabaseConfigured();
     if (!configured) {
@@ -999,20 +1021,36 @@ app.get("/api/backup/supabase/status", async (req, res) => {
   }
 });
 
-// Trigger bidirectional sync between Firebase and Supabase
+// Trigger synchronization between Firebase and Supabase (Strictly scoped to caller's records: user_id == req.userId)
 app.post("/api/backup/two-way-sync", requireFirebaseAuth, authenticatedUidLimiter, async (req: AuthenticatedRequest, res) => {
   try {
-    const result = await runTwoWaySync();
+    const userId = req.userId!;
+    const result = await runTwoWaySync(userId);
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message || String(error) });
   }
 });
 
-// Pull updates from Supabase PostgreSQL back into Firebase Firestore
+// Pull updates from Supabase PostgreSQL back into Firebase Firestore (Strictly scoped to caller's records: user_id == req.userId)
 app.post("/api/backup/pull-from-supabase", requireFirebaseAuth, authenticatedUidLimiter, async (req: AuthenticatedRequest, res) => {
   try {
-    const result = await pullSupabaseToFirebase();
+    const userId = req.userId!;
+    const result = await pullSupabaseToFirebase(userId);
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+// Admin-only restore endpoint for recreating missing Firestore documents from Supabase (Strictly requires CRON_SECRET)
+app.post("/api/backup/restore-from-supabase", async (req, res) => {
+  if (!verifyCronAuth(req)) {
+    return res.status(401).json({ error: "Unauthorized: Valid x-cron-secret header is required for administrative disaster recovery restore." });
+  }
+
+  try {
+    const result = await restoreMissingFromSupabase();
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message || String(error) });

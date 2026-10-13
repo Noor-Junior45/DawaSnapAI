@@ -8,7 +8,7 @@
 
 ## 1. System Role & Architecture
 
-```
+```text
  ┌──────────────────────────────────────────────────────────────┐
  │                    CLIENT APPLICATIONS                       │
  │        (React Web SPA / PWA & Capacitor Android APK)        │
@@ -39,10 +39,11 @@
 2. **Supabase PostgreSQL (Relational SQL Mirror & Backup)**:
    - Hosted PostgreSQL database accessed server-side via `@supabase/supabase-js` using `SUPABASE_SERVICE_ROLE_KEY` (`server/supabaseBackup.ts:getSupabaseClient`).
    - Acts as an analytical mirror, relational query target, and off-site backup.
+   - Zero anon or authenticated access: Row Level Security is active with NO policies (`REVOKE ALL ON ALL TABLES FROM anon, authenticated`).
 
 3. **Data Flow**:
-   - **Firestore → Supabase**: Triggered by client debounced calls (`src/services/supabaseSyncService.ts:triggerDebouncedMedicinesSync`), manual sync in settings (`src/components/SettingsModal.tsx:handleManualSupabaseSync`), and server-side push (`server/twoWaySync.ts:pushFirestoreToSupabase`).
-   - **Supabase → Firestore**: Triggered by `/api/backup/pull-from-supabase` or `/api/backup/two-way-sync` (`server/twoWaySync.ts:pullSupabaseToFirebase`).
+   - **Firestore → Supabase**: Triggered by client debounced calls (`src/services/supabaseSyncService.ts:triggerDebouncedMedicinesSync`), manual sync in settings modal (`src/components/SettingsModal.tsx:handleManualSupabaseSync`), and server-side cron (`server/twoWaySync.ts:pushFirestoreToSupabase`). Scoped to caller's `req.userId` in user requests.
+   - **Supabase → Firestore**: Triggered by `/api/backup/pull-from-supabase` or `/api/backup/two-way-sync` (`server/twoWaySync.ts:pullSupabaseToFirebase`), strictly scoped to `req.userId`. Missing documents are never created in standard sync; they can only be recreated via the administrative disaster recovery restore endpoint `/api/backup/restore-from-supabase`.
 
 ---
 
@@ -50,11 +51,12 @@
 
 | Firebase Firestore Path | Supabase PostgreSQL Table | Primary Key in Supabase | Code Mapping Function |
 | :--- | :--- | :--- | :--- |
-| `medicines/{medicineId}` | `public.medicines` | `id` | `server/supabaseBackup.ts:formatMedicineForPostgres` |
+| `medicines/{medicineId}` | `public.medicines` | `(user_id, id)` | `server/supabaseBackup.ts:formatMedicineForPostgres` |
 | `medicines/{medicineId}/history/{historyId}` | `public.medicine_history` | `id` | `server/supabaseBackup.ts:backupMedicineHistoryToSupabase` |
 | `users/{userId}/settings/appSettings` | `public.user_configs` | `user_id` | `server/supabaseBackup.ts:backupUserConfigToSupabase` |
-| Firebase Auth User Profiles | `public.users` | `user_id` | `server/supabaseBackup.ts:backupUsersBatchToSupabase` |
-| `users/{userId}/pushTokens/{tokenId}` | *(Firestore only)* | N/A | `server.ts` (`POST /api/notifications/register-token`) |
+| Firebase Auth User Profiles | `public.users` | `uid` | `server/supabaseBackup.ts:backupUsersBatchToSupabase` |
+| `users/{userId}/pushTokens/{tokenId}` | `public.user_push_tokens` | `(user_id, id)` | `server.ts` (`POST /api/notifications/register-token`) |
+| Persistent Sync Watermarks | `public.sync_state` | `key` | `server/supabaseBackup.ts:getPersistentSyncState`, `setPersistentSyncState` |
 
 ---
 
@@ -62,18 +64,19 @@
 
 | Endpoint | HTTP Method | Authentication Method | Caller Scope | Database Touchpoints | Implementation Reference |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `/api/backup/supabase/status` | `GET` | Public / None | Anyone | Checks Supabase connection (`medicines` limit 1) | `server.ts` |
-| `/api/backup/supabase/sync-medicines` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Strictly scoped to caller's `req.userId`) | Upserts array of rows to Supabase `medicines` | `server.ts`, `server/supabaseBackup.ts:backupMedicinesBatchToSupabase` |
-| `/api/backup/supabase/sync-medicine` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Forces `medicine.userId = req.userId`) | Upserts single row to Supabase `medicines` | `server.ts`, `server/supabaseBackup.ts:backupMedicineToSupabase` |
-| `/api/backup/supabase/delete-medicine` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Deletes only where `user_id == req.userId`) | Deletes row from Supabase `medicines` | `server.ts`, `server/supabaseBackup.ts:deleteMedicineFromSupabase` |
-| `/api/backup/supabase/delete-medicines-batch` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Deletes only where `user_id == req.userId`) | Deletes multiple rows from Supabase `medicines` | `server.ts`, `server/supabaseBackup.ts:deleteMedicinesBatchFromSupabase` |
-| `/api/backup/supabase/sync-config` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Forces `config.userId = req.userId`) | Upserts row to Supabase `user_configs` | `server.ts`, `server/supabaseBackup.ts:backupUserConfigToSupabase` |
-| `/api/backup/supabase/sync-history` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Forces `history.userId = req.userId`) | Upserts row to Supabase `medicine_history` | `server.ts`, `server/supabaseBackup.ts:backupMedicineHistoryToSupabase` |
-| `/api/backup/two-way-sync` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User | Runs full push to Supabase, then pulls from Supabase | `server.ts`, `server/twoWaySync.ts:runTwoWaySync` |
-| `/api/backup/pull-from-supabase` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User | Reads Supabase `medicines` and writes to Firestore `medicines` via `bulkWriter` | `server.ts`, `server/twoWaySync.ts:pullSupabaseToFirebase` |
+| `/api/backup/supabase/status` | `GET` | Firebase Bearer Token OR `x-cron-secret` Header | Authenticated User or Internal Scheduler | Queries Supabase `medicines` limit 1 with service role | `server.ts` |
+| `/api/backup/supabase/sync-medicines` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Strictly scoped to `req.userId`) | Upserts batch into Supabase `medicines` on conflict `(user_id, id)` | `server.ts`, `server/supabaseBackup.ts:backupMedicinesBatchToSupabase` |
+| `/api/backup/supabase/sync-medicine` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Forces `medicine.userId = req.userId`) | Upserts row into Supabase `medicines` on conflict `(user_id, id)` | `server.ts`, `server/supabaseBackup.ts:backupMedicineToSupabase` |
+| `/api/backup/supabase/delete-medicine` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Scoped to `user_id == req.userId`) | Updates Supabase `medicines` with `is_deleted = true` tombstone | `server.ts`, `server/supabaseBackup.ts:deleteMedicineFromSupabase` |
+| `/api/backup/supabase/delete-medicines-batch` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Scoped to `user_id == req.userId`) | Updates Supabase `medicines` with `is_deleted = true` tombstones | `server.ts`, `server/supabaseBackup.ts:deleteMedicinesBatchFromSupabase` |
+| `/api/backup/supabase/sync-config` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Forces `config.userId = req.userId`) | Upserts row into Supabase `user_configs` on conflict `user_id` | `server.ts`, `server/supabaseBackup.ts:backupUserConfigToSupabase` |
+| `/api/backup/supabase/sync-history` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Forces `history.userId = req.userId`) | Upserts row into Supabase `medicine_history` on conflict `id` | `server.ts`, `server/supabaseBackup.ts:backupMedicineHistoryToSupabase` |
+| `/api/backup/two-way-sync` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Strictly scoped to `user_id == req.userId`) | Pushes caller's Firestore records to Supabase | `server.ts`, `server/twoWaySync.ts:runTwoWaySync` |
+| `/api/backup/pull-from-supabase` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User (Strictly scoped to `user_id == req.userId`) | Pulls caller's newer Supabase rows to existing Firestore docs | `server.ts`, `server/twoWaySync.ts:pullSupabaseToFirebase` |
+| `/api/backup/restore-from-supabase` | `POST` | `x-cron-secret` Header only | Administrator Disaster Recovery | Restores all Supabase rows to Firestore, creating missing documents | `server.ts`, `server/twoWaySync.ts:restoreMissingFromSupabase` |
 | `/api/notifications/register-token` | `POST` | Firebase Bearer Token (`requireFirebaseAuth`) | Authenticated User | Writes document to Firestore `users/{userId}/pushTokens/{tokenId}` | `server.ts` |
-| `/api/cron/sync` | `POST` | `x-cron-secret` Header or `?secret=` | Internal Scheduler / Cron | Executes `runTwoWaySync()` server-wide | `server.ts:verifyCronAuth` |
-| `/api/cron/check-expiry` | `POST` | `x-cron-secret` Header or `?secret=` | Internal Scheduler / Cron | Executes `runBackgroundExpiryCheck()` | `server.ts:verifyCronAuth`, `server/expiryCron.ts` |
+| `/api/cron/sync` | `POST` | `x-cron-secret` Header only (`crypto.timingSafeEqual`) | Internal Scheduler / Cron | Executes global push `runTwoWaySync()` across all accounts | `server.ts:verifyCronAuth` |
+| `/api/cron/check-expiry` | `POST` | `x-cron-secret` Header only (`crypto.timingSafeEqual`) | Internal Scheduler / Cron | Executes `runBackgroundExpiryCheck()` | `server.ts:verifyCronAuth`, `server/expiryCron.ts` |
 
 ---
 
@@ -81,58 +84,63 @@
 
 ### Real Primary Keys & On-Conflict Targets
 1. **`public.medicines`**:
-   - **Primary Key**: `id` (`TEXT`).
-   - **Conflict Strategy in Code** (`server/supabaseBackup.ts:executeMedicineUpsert`):
-     - Strategy 1: Attempts upsert with candidate targets `['user_id,id', 'id', 'id,user_id', undefined]`. Once a target succeeds, it caches `resolvedMedicineConflictTarget`.
-     - Strategy 2 (Fallback): If candidate conflict targets fail with Postgres error `42P10` (no unique constraint matching given keys), code falls back to `client.from('medicines').select('id').eq('id', row.id).eq('user_id', row.user_id)`. If record exists, it runs `.update()`; otherwise `.insert()`.
+   - **Primary Key**: `(user_id, id)`.
+   - **Unique Index**: `CREATE UNIQUE INDEX idx_medicines_user_id_id ON public.medicines (user_id, id);`.
+   - **Conflict Target in Code**: Strictly `{ onConflict: 'user_id,id' }` (`server/supabaseBackup.ts:executeMedicineUpsert`).
+   - **Fallback Mechanism**: Scoped strictly by composite key `(user_id, id)`. If conflict occurs, verifies existing row with `.eq('user_id', row.user_id).eq('id', row.id)` and executes `.update()` or `.insert()`. All legacy fallbacks targeting `id` alone have been completely removed.
 2. **`public.users`**:
-   - **Primary Key**: `user_id` (`TEXT`).
-   - **Conflict Target**: `{ onConflict: 'user_id' }` (`server/supabaseBackup.ts:backupUsersBatchToSupabase`).
+   - **Primary Key**: `uid` (`TEXT`).
+   - **Conflict Target**: `{ onConflict: 'user_id' }` (mapped to `uid`).
 3. **`public.user_configs`**:
    - **Primary Key**: `user_id` (`TEXT`).
-   - **Conflict Target**: `{ onConflict: 'user_id' }` (`server/supabaseBackup.ts:backupUserConfigToSupabase`).
+   - **Conflict Target**: `{ onConflict: 'user_id' }`.
 4. **`public.medicine_history`**:
    - **Primary Key**: `id` (`TEXT`).
-   - **Conflict Target**: `{ onConflict: 'id' }` (`server/supabaseBackup.ts:backupMedicineHistoryToSupabase`).
+   - **Conflict Target**: `{ onConflict: 'id' }`.
+5. **`public.sync_state`**:
+   - **Primary Key**: `key` (`TEXT`).
+   - **Conflict Target**: `{ onConflict: 'key' }`.
 
-### Conflict Resolution Rule & Timestamp Semantics
-- **Meaning of `updated_at` in Supabase**: Represents the **source edit time** (`server/supabaseBackup.ts:formatMedicineForPostgres`), converted from Firestore `updatedAt` (or `createdAt`). It is **NOT** the timestamp of when the backup sync executed.
-- **Clock Skew Handling**: During push (`server/twoWaySync.ts:pushFirestoreToSupabase`), incremental selection filters documents where `docUpdatedMs >= persistentLastSync`. If `sync_state` table is missing or empty, `persistentLastSync` evaluates to `0`, resulting in a full push.
-- **Pull Overwrite**: When pulling from Supabase (`server/twoWaySync.ts:pullSupabaseToFirebase`), writes use `bulkWriter.set(docRef, updatePayload, { merge: true })`. No field-level three-way merge or clock-skew compensation is performed; Supabase values overwrite matching Firestore fields unconditionally, setting Firestore `updatedAt = new Date(row.updated_at).getTime()`.
+### Meaning of `updated_at` & Explanation of the 9-Second Window
+- **Source of `updated_at`**: In Supabase `medicines`, the column `updated_at` is derived directly from the Firestore source document `updatedAt` (or `createdAt` if `updatedAt` is absent), converted from milliseconds into an ISO-8601 string (`server/supabaseBackup.ts:formatMedicineForPostgres`).
+- **Why rows share a 9-second window**: When client batches or initial sync operations run (e.g. `backupMedicinesBatchToSupabase`, client-side migrations, or initial imports), multiple medicine documents in Firestore were created or saved within a single multi-document execution transaction that took approximately 9 seconds to commit. Additionally, whenever legacy records lacked both `updatedAt` and `createdAt`, the system stamped them with the current execution time.
+- **Sync-Time Fallback Logging**: `formatMedicineForPostgres` includes an explicit warning whenever source timestamps are missing:
+  ```text
+  [SUPABASE BACKUP] Medicine <id> missing source updatedAt/createdAt; stamped with sync time instead of source edit time.
+  ```
+- **Conflict Resolution Rule during Pull**: A Supabase row is applied to Firestore **only if** `supabase.updated_at > firestore.updatedAt`. If the Supabase edit time is equal to or older than the Firestore document, the row is discarded.
 
 ---
 
 ## 5. Complete Field-by-Field Medicine Mapping
-
-The following matrix documents **every** field permitted in Firestore by `firestore.rules:isValidMedicine` and `src/types.ts:Medicine`:
 
 | Firestore Field | Type in Firestore | Supabase Column in `public.medicines` | Included in `raw_payload` | Restored by `pullSupabaseToFirebase`? |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `string` | `id` | Yes | **Yes** |
 | `userId` | `string` | `user_id` | Yes | **Yes** |
 | `name` | `string` | `name` | Yes | **Yes** |
-| `dosage` | `string` | `dosage` | Yes | **Yes** |
-| `expirationDate` | `string` | `expiration_date` | Yes | **Yes** |
-| `quantity` | `number` | `quantity` | Yes | **Yes** |
-| `totalQuantity` | `number` | `total_quantity` | Yes | **Yes** |
-| `form` | `string` (enum) | `form` | Yes | **Yes** (defaults to `'tablet'` if missing) |
-| `category` | `string` | `category` | Yes | **Yes** |
-| `categories` | `array` (`string[]`) | `categories` | Yes | **Yes** (defaults to `[row.category]` if not array) |
-| `tags` | `array` (`string[]`) | `tags` | Yes | **Yes** (defaults to `[]` if not array) |
-| `usageInstructions`| `string` | `usage_instructions` | Yes | **Yes** (defaults to `''` if missing) |
-| `price` | `number` \| `string` | `price` | Yes | **Yes** |
-| `barcode` | `string` | `barcode` | Yes | **Yes** |
-| `mfgDate` | `string` | `mfg_date` | Yes | **Yes** |
-| `manufacturer` | `string` | `manufacturer` | Yes | **Yes** |
-| `taken` | `boolean` | `taken` | Yes | **Yes** |
-| `liked` | `boolean` | `liked` | Yes | **Yes** |
-| `isDeleted` | `boolean` | `is_deleted` | Yes | **Yes** |
-| `deletedAt` | `number` | `deleted_at` | Yes | **No** (`deletedAt` is not mapped in `pullSupabaseToFirebase`) |
-| `createdAt` | `number` \| `timestamp` | `created_at` | Yes | **No** (`createdAt` is not mapped in `pullSupabaseToFirebase`) |
+| `dosage` | `string` | `dosage` | Yes | **Yes** (skipped if `'N/A'` or empty) |
+| `expirationDate` | `string` | `expiration_date` | Yes | **Yes** (restored as part of the batch triad) |
+| `quantity` | `number` | `quantity` | Yes | **Yes** (restored as part of the batch triad) |
+| `totalQuantity` | `number` | `total_quantity` | Yes | **Yes** (restored as part of the batch triad) |
+| `form` | `string` (enum) | `form` | Yes | **Yes** (skipped if missing; no default placeholder) |
+| `category` | `string` | `category` | Yes | **Yes** (skipped if `'Other'` or missing) |
+| `categories` | `array` (`string[]`) | `categories` | Yes | **Yes** (restored if non-empty array) |
+| `tags` | `array` (`string[]`) | `tags` | Yes | **Yes** (restored if non-empty array) |
+| `usageInstructions`| `string` | `usage_instructions` | Yes | **Yes** (skipped if missing; no empty string placeholder) |
+| `price` | `number` \| `string` | `price` | Yes | **Yes** (restored if numeric) |
+| `barcode` | `string` | `barcode` | Yes | **Yes** (skipped if missing) |
+| `mfgDate` | `string` | `mfg_date` | Yes | **Yes** (skipped if missing) |
+| `manufacturer` | `string` | `manufacturer` | Yes | **Yes** (skipped if missing) |
+| `taken` | `boolean` | `taken` | Yes | **Yes** (restored if boolean) |
+| `liked` | `boolean` | `liked` | Yes | **Yes** (restored if boolean) |
+| `isDeleted` | `boolean` | `is_deleted` | Yes | **Yes** (tombstone marked; never un-deleted) |
+| `deletedAt` | `number` | `deleted_at` | Yes | **Yes** (restored if tombstoned) |
+| `createdAt` | `number` \| `timestamp` | `created_at` | Yes | **No** (preserved in Firestore; set only on disaster recovery) |
 | `updatedAt` | `number` \| `timestamp` | `updated_at` | Yes | **Yes** (mapped from `row.updated_at`) |
-| `schedule` | `string` | None | Yes | **No** (field lost if doc only exists in Supabase) |
-| `notes` | `string` | None | Yes | **No** (field lost if doc only exists in Supabase) |
-| `batches` | `array` | `batches` (`jsonb`/`text`) | Yes | **No** (not mapped back in `pullSupabaseToFirebase`) |
+| `schedule` | `string` | None | Yes | **No** (field not stored in dedicated column) |
+| `notes` | `string` | None | Yes | **No** (field not stored in dedicated column) |
+| `batches` | `array` | `batches` (`jsonb`/`text`) | Yes | **Yes** (restored strictly together with `quantity` and `expirationDate`) |
 | `allBatches` | `array` | None | Yes | **No** |
 | `activeBatches` | `array` | None | Yes | **No** |
 | `expiredOrEmptyBatches` | `array` | None | Yes | **No** |
@@ -147,8 +155,8 @@ The following matrix documents **every** field permitted in Firestore by `firest
 | `lowStockThreshold` | `number` | None | Yes | **No** |
 | `enableEmailExpiryAlert` | `boolean` | None | Yes | **No** |
 | `enableEmailLowStockAlert` | `boolean` | None | Yes | **No** |
-| `isEncrypted` | `boolean` | None | Yes | **No** |
-| `ivMap` | `map` | None | Yes | **No** |
+| `isEncrypted` | None | None | None | **REMOVED** (Dead field removed from rules and types) |
+| `ivMap` | None | None | None | **REMOVED** (Dead field removed from rules and types) |
 | `imageUrl` | `string` | None | Yes (`'local'`) | **No** |
 | `capturedImage` | `string` (base64) | None | **Stripped** | **No** (never saved to cloud) |
 | `capturedImageBack` | `string` (base64) | None | **Stripped** | **No** (never saved to cloud) |
@@ -156,32 +164,32 @@ The following matrix documents **every** field permitted in Firestore by `firest
 
 ---
 
-## 6. Data Contract & Pull Invariants
+## 6. Data Contract & Pull Safety Invariants
 
-When rows in Supabase `public.medicines` are ingested by `server/twoWaySync.ts:pullSupabaseToFirebase`, the following strict rules are enforced:
+When rows from Supabase `public.medicines` are ingested by `server/twoWaySync.ts:pullSupabaseToFirebase`, the engine enforces seven strict safety invariants:
 
-1. **User Identity Verification**:
-   - `row.user_id` is queried against Firebase Authentication using `auth.getUser(row.user_id)`.
-   - If the user account does not exist in Firebase Auth, **the row is skipped**.
-2. **Key Invariants**:
-   - `row.id` must be a non-empty string.
-   - `row.user_id` must be a non-empty string.
-   - `row.name` must be a non-empty string.
-3. **Format & Value Rejection Filters**:
-   - `row.expiration_date` must match `/^\d{4}-\d{2}-\d{2}$/`.
-   - `row.dosage` must not be `'N/A'`.
-   - `row.category` must not be `'Other'`.
-4. **Fallback Defaults Applied When Pulling Into Firestore**:
-   - `form`: defaults to `'tablet'` if null or empty.
-   - `quantity`: defaults to `0` if not a number.
-   - `totalQuantity`: defaults to `row.quantity` or `0` if not a number.
-   - `categories`: defaults to `[row.category]` if not an array.
-   - `tags`: defaults to `[]` if not an array.
-   - `usageInstructions`: defaults to `''` if null or empty.
-   - `price`: defaults to `null` if not a number.
-   - `barcode`, `mfgDate`, `manufacturer`: default to `null` if empty.
-   - `taken`, `liked`, `isDeleted`: default to `false` if falsy.
-   - `updatedAt`: defaults to `new Date(row.updated_at).getTime()` or `Date.now()`.
+1. **User Identity Batched Verification**:
+   - `pullSupabaseToFirebase` performs a deduplicated, chunked lookup of user IDs via `auth.getUsers()` (up to 100 UIDs per batch).
+   - Zero sequential per-row `auth.getUser` calls. If a UID does not exist in Firebase Auth, its rows are rejected immediately.
+2. **Pre-Existing Document Constraint (Pull Safety)**:
+   - In normal pull operations (`allowCreateMissing = false`), the engine checks `docSnap.exists`.
+   - If the Firestore document does **not already exist**, the row is **SKIPPED**. Normal pull never creates new documents in Firestore.
+   - To recreate missing documents following catastrophic loss, the administrator must invoke `POST /api/backup/restore-from-supabase` with `CRON_SECRET`.
+3. **Strict Timestamp Progression**:
+   - A row is applied **only if** `supabase.updated_at > firestore.updatedAt`.
+   - If the incoming edit time is older or equal, it is ignored.
+4. **Zero Fallback Defaults (No Placeholders)**:
+   - Missing fields are omitted entirely from the update payload.
+   - The engine **never** supplies default placeholders like `'tablet'`, `''`, or synthesized category strings. If a column is absent or null, the existing Firestore value is left untouched.
+5. **Atomic Batches Triad (Restored Together or Neither)**:
+   - If `row.batches` is present, it is restored **strictly together with** `row.quantity` and `row.expiration_date`.
+   - If either `quantity` or `expiration_date` is missing or invalid, `batches` is skipped entirely. This guarantees multi-batch inventories never decouple from total count and earliest expiry.
+6. **Tombstone Preservation & Anti-Resurrection**:
+   - If an existing Firestore document is marked `isDeleted: true`, an incoming Supabase row with `is_deleted = false` is rejected.
+   - Soft-deleted documents can never be resurrected by database sync.
+7. **Strict Multi-Tenant Scoping**:
+   - When called via client endpoints (`/api/backup/pull-from-supabase` or `/api/backup/two-way-sync`), `targetUserId` is mandatory (`req.userId`).
+   - Queries to Supabase and Firestore filter strictly on `user_id == req.userId`. Global sync across all users is restricted to authenticated cron execution.
 
 ---
 
@@ -195,91 +203,145 @@ When rows in Supabase `public.medicines` are ingested by `server/twoWaySync.ts:p
 
 ### User Config (`public.user_configs`)
 - Handled by `server/supabaseBackup.ts:backupUserConfigToSupabase`.
-- `alertThreshold`: Allowed values enforced by `firestore.rules:isValidUserConfig` are **any number between `0` and `365`** (`data.alertThreshold >= 0 && data.alertThreshold <= 365`). The UI offers preset buttons for 30, 60, and 90 days, but the database contract accepts any number in the range `[0, 365]`.
+- `alertThreshold`: Allowed values enforced by `firestore.rules:isValidUserConfig` are **any number between `0` and `365`** (`data.alertThreshold >= 0 && data.alertThreshold <= 365`). The UI offers preset buttons for 30, 60, and 90 days, but the database contract accepts any integer in the range `[0, 365]`.
 
 ---
 
-## 8. Deletion Semantics & Resurrection Risks
+## 8. Deletion Semantics & Tombstones
 
 1. **Soft Delete**:
    - Client soft delete sets `isDeleted: true` and `deletedAt: Date.now()` in Firestore (`src/App.tsx:handleDeleteMultiple`).
-   - In Supabase, this translates to `is_deleted = true` and `deleted_at = <ISO timestamp>`.
-2. **Hard Delete (Firestore → Supabase)**:
-   - When a user permanently deletes a medicine (`src/App.tsx:handlePermanentDelete`), the client executes `deleteDoc(doc(db, 'medicines', id))` in Firestore and calls `DELETE /api/backup/supabase/delete-medicine`.
-   - During push sync (`server/twoWaySync.ts:pushFirestoreToSupabase`), any medicine present in Supabase with `is_deleted = false` that no longer exists in Firestore is marked `is_deleted = true`.
-3. **Resurrection Risk (Supabase → Firestore)**:
-   - `pullSupabaseToFirebase` does **NOT** delete Firestore documents missing from Supabase.
-   - If a medicine was permanently deleted in Firestore, but remains in Supabase with `is_deleted = false`, running `pullSupabaseToFirebase` will recreate the medicine document in Firestore.
-   - Permanent deletions must therefore be reflected in Supabase (either deleted or marked `is_deleted = true`) to avoid resurrection.
+   - In Supabase, this translates to `is_deleted = true`, `deleted_at = NOW()`, and `updated_at = NOW()`.
+2. **Permanent Delete & Tombstones**:
+   - Direct deletions (`deleteMedicineFromSupabase`, `deleteMedicinesBatchFromSupabase`) update Supabase rows with `is_deleted = true`, `deleted_at = NOW()`, and `updated_at = NOW()`.
+   - Retaining tombstones prevents hard-deleted rows from being resurrected during sync.
+3. **Resurrection Prevention**:
+   - `pullSupabaseToFirebase` checks `firestoreData.isDeleted`. If `isDeleted == true` in Firestore, incoming updates without deletion markers are skipped.
+   - When `allowCreateMissing` is false, missing Firestore documents are not created from Supabase.
 
 ---
 
-## 9. Encryption Status & IV Map
+## 9. Encryption Status: Dead Fields Removed
 
-- `src/types.ts:Medicine` and `firestore.rules:isValidMedicine` define `isEncrypted?: boolean` and `ivMap?: { [key: string]: string }`.
-- Client-side field-level encryption logic: **NOT IMPLEMENTED**.
-- At-rest encryption is provided natively by Google Cloud Firestore (AES-256) and in-transit encryption by TLS 1.3.
-- **Constraint**: External writers must **NOT** set `isEncrypted: true` or populate `ivMap`. Because decryption logic is NOT IMPLEMENTED in the client, writing ciphertexts will cause the UI to display raw cipher strings.
+- The fields `isEncrypted` and `ivMap` were legacy placeholders that had no active client or server decryption logic.
+- **Action Taken**: Formally removed from `firestore.rules` and `src/types.ts:Medicine`.
+- All data at rest is encrypted natively by Google Cloud Firestore (AES-256) and Supabase PostgreSQL (AES-256), and in transit via TLS 1.3.
 
 ---
 
-## 10. ID Generation
+## 10. Medicine ID Generation
 
 - Medicine IDs in Firestore: Generated using standard `crypto.randomUUID()` (`src/App.tsx:1062`). Format is a standard 36-character UUID v4.
-- History IDs in Firestore: Generated using `crypto.randomUUID()` (`src/App.tsx:1052`, `src/App.tsx:1104`).
-- Constraint: Document IDs must satisfy `firestore.rules:isValidMedicine` (`data.id is string && data.id.size() > 0 && data.id.size() < 100`).
+- History IDs in Firestore: Generated using `crypto.randomUUID()` (`src/App.tsx:1052`).
+- Validation Rule: Must satisfy `firestore.rules:isValidMedicine` (`data.id is string && data.id.size() > 0 && data.id.size() < 100`).
 
 ---
 
-## 11. Push Tokens, FCM & Storage Usage
+## 11. Push Tokens, FCM & Dead Token Cleanup
 
 1. **Push Token Storage**:
-   - Document path: `users/{userId}/pushTokens/{tokenId}`.
-   - Saved by client (`src/services/nativeNotificationService.ts`) or server (`server.ts:POST /api/notifications/register-token`).
-   - Structure: `{ token: string, platform: 'android' | 'web', userAgent?: string, updatedAt: string }`.
-   - Security: Permitted for authenticated user (`firestore.rules: match /pushTokens/{tokenId} { allow read, write: if isAuthenticated() && request.auth.uid == userId; }`).
+   - Stored in Firestore at `users/{userId}/pushTokens/{tokenId}`.
+   - Registered via `POST /api/notifications/register-token` or client `src/services/nativeNotificationService.ts`.
 2. **FCM Dispatch Flow**:
-   - Worker: `server/expiryCron.ts:runBackgroundExpiryCheck`.
-   - When an alert condition triggers (`30_DAYS`, `7_DAYS`, `EXPIRED`), the worker fetches tokens from `users/{userId}/pushTokens` and dispatches alerts via `firebase-admin/messaging:getMessaging().sendEachForMulticast()`.
-3. **Firebase Storage**:
-   - Firebase Storage SDK is imported in `src/firebase.ts`, but is **UNUSED** by the application.
-   - All captured packaging images are stored exclusively in on-device IndexedDB via `src/services/localImageStorage.ts`.
+   - Handled in `server/expiryCron.ts:runBackgroundExpiryCheck`.
+   - Dispatches expiry notifications using `firebase-admin/messaging:getMessaging().sendEachForMulticast()`.
+3. **Dead Token Cleanup**:
+   - `server/expiryCron.ts` inspects each response in `multicastResponse.responses`.
+   - Any token returning error code `messaging/registration-token-not-registered` or `messaging/invalid-registration-token` is immediately pruned in a batch delete from Firestore `users/{userId}/pushTokens`.
+4. **Firebase Storage**:
+   - **UNUSED**. Photos never leave the client device; they are stored exclusively in on-device IndexedDB via `src/services/localImageStorage.ts`.
 
 ---
 
-## 12. Schedulers & Sync Triggers
+## 12. Account Deletion Flow Across All Stores
+
+When a user initiates account deletion (`POST /api/user/purge-data`), the system coordinates cleanup across all three persistence layers:
+
+1. **Firestore Permanent Deletion**:
+   - Deletes all user documents in collection `medicines` where `userId == req.userId`.
+   - Deletes document `users/{userId}` and subcollections `users/{userId}/settings/appSettings` and `users/{userId}/pushTokens/*`.
+   - Deletes expiry schedule from `server_expiry_schedules/{userId}`.
+   - Deletes sent alert deduplication logs from `server_sent_expiry_alerts` where `userId == req.userId`.
+2. **Supabase PostgreSQL Purge**:
+   - Executed via `server/supabaseBackup.ts:deleteUserAllDataFromSupabase(userId)`.
+   - Purges all rows where `user_id == userId` in `public.medicines`.
+   - Purges all rows where `user_id == userId` in `public.user_configs`.
+   - Purges all rows where `user_id == userId` in `public.medicine_history`.
+3. **In-Memory Worker State**:
+   - Executed via `server/expiryCron.ts:purgeUserServerData(userId)`.
+   - Evicts active schedules and rate-limiting buckets from memory.
+
+---
+
+## 13. Schedulers & Sync Triggers
 
 1. **Client Debounce**:
-   - Implemented in `src/services/supabaseSyncService.ts:triggerDebouncedMedicinesSync`.
-   - Timer: 2500ms debounce delay (`DEBOUNCE_DELAY_MS`).
+   - Triggered on client data modifications with a 2500ms delay (`src/services/supabaseSyncService.ts:triggerDebouncedMedicinesSync`).
 2. **Manual Sync**:
-   - Triggered via UI in `src/components/SettingsModal.tsx:handleManualSupabaseSync`.
-   - Calls `POST /api/backup/supabase/sync-medicines` followed by `POST /api/backup/two-way-sync`.
+   - Triggered from the UI Settings modal (`src/components/SettingsModal.tsx:handleManualSupabaseSync`).
+   - Calls `POST /api/backup/supabase/sync-medicines` followed by `POST /api/backup/two-way-sync` (scoped strictly to `req.userId`).
 3. **Server Schedulers**:
    - Managed in `server.ts:setupViteAndListen`.
-   - Host check: `const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)`.
-   - When running on a persistent host (Render / container), `server/expiryCron.ts:startExpiryCron()` runs in-process once every hour (`60 * 60 * 1000`).
-   - On serverless hosts (Vercel), in-process intervals are disabled; scheduled jobs rely on external cron triggering `/api/cron/sync` and `/api/cron/check-expiry` with `CRON_SECRET`.
+   - Evaluates `const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)`.
+   - On persistent hosts (Render / container), `server/expiryCron.ts:startExpiryCron()` runs in-process once every hour (`60 * 60 * 1000`).
+   - On serverless hosts (Vercel), in-process intervals are disabled; scheduled jobs rely on external cron triggering `/api/cron/sync` and `/api/cron/check-expiry` with `CRON_SECRET` in header `x-cron-secret`.
 
 ---
 
-## 13. Known Limitations & Security Notes
+## 14. Files Changed & Required Environment Variables
 
-1. **Unidirectional History**: Medicine history audit records are pushed to Supabase, but are never pulled back into Firestore.
-2. **Partial Field Restoration**: `pullSupabaseToFirebase` only maps a subset of columns back into Firestore documents. Custom metadata (`batches`, `dosageUnit`, `schedule`, `notes`, `enableEmailExpiryAlert`) is omitted during pull.
-3. **Rate Limiting Scope**: `authenticatedUidLimiter` in `server.ts` uses in-memory map tracking. In distributed or serverless environments, state is not shared across instances.
-4. **Zero Cloud Photos**: Photos never sync to Supabase or Firestore. `imageUrl` is hardcoded to `'local'`.
-5. **No 3-Way Diffing**: Sync uses last-write-wins based on `updated_at`. Concurrent edits to different fields on the same document are not merged at the field level.
+### Files Changed in Repository
+1. `server.ts`:
+   - Enforced user scoping on `/api/backup/two-way-sync` and `/api/backup/pull-from-supabase`.
+   - Enforced authentication on `/api/backup/supabase/status` (Firebase Auth Bearer token OR `CRON_SECRET`).
+   - Restricted `/api/cron/sync` and `/api/cron/check-expiry` strictly to header `x-cron-secret` via `crypto.timingSafeEqual` (removed `?secret=` query option).
+   - Added administrative disaster recovery restore endpoint `/api/backup/restore-from-supabase`.
+2. `server/twoWaySync.ts`:
+   - Scoped `pushFirestoreToSupabase` and `pullSupabaseToFirebase` to `targetUserId`.
+   - Replaced per-row `auth.getUser` with chunked, deduplicated `auth.getUsers` in 100-user batches.
+   - Enforced pull safety: only update pre-existing Firestore docs, require `supabase.updated_at > firestore.updatedAt`, zero default placeholders, atomic batch triad, and anti-resurrection guards.
+   - Added `restoreMissingFromSupabase` for admin-only restore.
+3. `server/supabaseBackup.ts`:
+   - Updated `executeMedicineUpsert` to strictly target composite key `(user_id, id)` and removed legacy `id` fallbacks.
+   - Converted deletions into soft tombstones (`is_deleted = true`, `deleted_at = NOW()`, `updated_at = NOW()`).
+   - Added log line in `formatMedicineForPostgres` when source edit time is absent and sync time is stamped.
+   - Added `userId` scoping to `fetchMedicinesFromSupabase`.
+4. `server/expiryCron.ts`:
+   - Added automated pruning of dead FCM tokens returning `messaging/registration-token-not-registered` or `messaging/invalid-registration-token`.
+5. `SUPABASE_BACKUP_SCHEMA.sql`:
+   - Added explicit unique index `CREATE UNIQUE INDEX IF NOT EXISTS idx_medicines_user_id_id ON public.medicines (user_id, id);`.
+   - Added `public.sync_state` table with RLS enabled and zero anon policies.
+   - Configured `vw_active_medicines WITH (security_invoker = true)`.
+   - Explicitly revoked all privileges on public tables and views from `anon` and `authenticated`.
+6. `firestore.rules`:
+   - Removed dead `isEncrypted` and `ivMap` from `isValidMedicine` schema.
+7. `src/types.ts`:
+   - Removed dead `isEncrypted` and `ivMap` properties from `Medicine` interface.
+8. `FIREBASE_SUPABASE_INTEGRATION_SPEC.md`:
+   - Complete architectural and data contract update.
+
+### Environment Variables Needed
+- `SUPABASE_URL`: HTTPS URL of your Supabase project (e.g. `https://xyz.supabase.co`).
+- `SUPABASE_SERVICE_ROLE_KEY`: Service-role secret key for Supabase (bypasses RLS on server; never exposed to browser).
+- `CRON_SECRET`: High-entropy shared secret for cron jobs and disaster recovery endpoints.
+- `FIREBASE_SERVICE_ACCOUNT_KEY`: Service account JSON string for Firebase Admin SDK.
+- `RESEND_API_KEY`: API key for automated expiry alert emails.
 
 ---
 
-## 14. Changelog
+## 15. Changelog
 
 - **2026-10-13**:
-  - Aligned document with actual repository implementation (`server/supabaseBackup.ts`, `server/twoWaySync.ts`, `server/expiryCron.ts`, `server.ts`).
-  - Corrected table primary keys and conflict targets (`medicines: id`, `users: user_id`, `user_configs: user_id`, `medicine_history: id`).
-  - Added comprehensive endpoints and authentication matrix.
-  - Added full field mapping with pull restoration statuses.
-  - Documented deletion semantics, resurrection risks, encryption status (NOT IMPLEMENTED), ID generation (`crypto.randomUUID`), and FCM dispatch flows.
-  - Specified allowed range for `alertThreshold` (`[0, 365]`).
-  - Replaced external assistant targeting with a neutral data contract.
+  - Scoped `/api/backup/pull-from-supabase` and `/api/backup/two-way-sync` to `req.userId`.
+  - Restricted `/api/cron/sync` strictly to header `x-cron-secret` validated via `crypto.timingSafeEqual` (removed `?secret=` query option).
+  - Protected `/api/backup/supabase/status` with Firebase Auth Bearer token or `CRON_SECRET`.
+  - Added pull safety: existing-doc requirement in normal sync, `supabase.updated_at > firestore.updatedAt` check, zero default placeholders, and atomic batch triads.
+  - Added administrative restore endpoint `/api/backup/restore-from-supabase`.
+  - Replaced per-row `auth.getUser` with deduplicated, batched `auth.getUsers` (100 per chunk).
+  - Enforced composite on-conflict target `user_id,id` in Supabase upserts and added unique index in schema.
+  - Replaced hard-deletes with `is_deleted` tombstones to prevent resurrection.
+  - Added warning log line when documents lack source timestamps and stamp sync time.
+  - Hardened `SUPABASE_BACKUP_SCHEMA.sql`: added `sync_state`, `security_invoker` view, and explicit `REVOKE ALL` from `anon`/`authenticated`.
+  - Implemented automatic pruning of unregistered FCM tokens (`registration-token-not-registered`).
+  - Removed dead `isEncrypted` and `ivMap` fields from `firestore.rules` and `src/types.ts`.
+  - Documented complete account deletion lifecycle across all datastores.

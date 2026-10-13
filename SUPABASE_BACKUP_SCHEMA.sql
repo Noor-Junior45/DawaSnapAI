@@ -67,6 +67,9 @@ BEGIN
     END IF;
 END $$;
 
+-- Ensure explicit UNIQUE index exists on composite key (user_id, id) for ON CONFLICT target
+CREATE UNIQUE INDEX IF NOT EXISTS idx_medicines_user_id_id ON public.medicines (user_id, id);
+
 -- Indexes for high-performance querying & analytics
 CREATE INDEX IF NOT EXISTS idx_medicines_user_id ON public.medicines(user_id);
 CREATE INDEX IF NOT EXISTS idx_medicines_name ON public.medicines(name);

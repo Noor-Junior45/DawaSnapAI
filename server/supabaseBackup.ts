@@ -89,7 +89,11 @@ export function getIsoDateFromSource(val: any): string | null {
  * Strictly stores the source updatedAt in Supabase updated_at (convert from ms), NEVER sync time.
  */
 export function formatMedicineForPostgres(m: any): Record<string, any> {
-  const sourceUpdatedAt = getIsoDateFromSource(m.updatedAt) || getIsoDateFromSource(m.createdAt) || new Date(0).toISOString();
+  let sourceUpdatedAt = getIsoDateFromSource(m.updatedAt) || getIsoDateFromSource(m.createdAt);
+  if (!sourceUpdatedAt) {
+    sourceUpdatedAt = new Date().toISOString();
+    console.warn(`[SUPABASE BACKUP] Medicine ${m.id || 'unknown'} missing source updatedAt/createdAt; stamped with sync time instead of source edit time.`);
+  }
   const sourceDeletedAt = m.deletedAt ? (getIsoDateFromSource(m.deletedAt) || new Date(m.deletedAt).toISOString()) : null;
 
   // STRICT ON-DEVICE PRIVACY: Strip all photos, base64 strings, and image bytes from raw_payload
@@ -131,55 +135,31 @@ export function formatMedicineForPostgres(m: any): Record<string, any> {
   };
 }
 
-// Resolved conflict target for Supabase medicines table
-let resolvedMedicineConflictTarget: string | undefined = undefined;
-
 async function executeMedicineUpsert(client: SupabaseClient, payload: any | any[]) {
-  // Strategy 1: Attempt standard upsert with candidate conflict targets
-  const candidateTargets: (string | undefined)[] = resolvedMedicineConflictTarget !== undefined
-    ? [resolvedMedicineConflictTarget, 'user_id,id', 'id', 'id,user_id', undefined]
-    : ['user_id,id', 'id', 'id,user_id', undefined];
+  // Primary Upsert Strategy: strictly target composite key 'user_id,id'
+  try {
+    const res = await client
+      .from('medicines')
+      .upsert(payload, { onConflict: 'user_id,id' });
 
-  // Unique list of candidate targets to try
-  const seenTargets = new Set<string | undefined>();
-  const targetsToTry = candidateTargets.filter(t => {
-    if (seenTargets.has(t)) return false;
-    seenTargets.add(t);
-    return true;
-  });
-
-  let lastError: any = null;
-
-  for (const target of targetsToTry) {
-    try {
-      const options = target ? { onConflict: target } : undefined;
-      const res = await client
-        .from('medicines')
-        .upsert(payload, options);
-
-      if (!res.error) {
-        resolvedMedicineConflictTarget = target;
-        return res;
-      }
-
-      lastError = res.error;
-      const msg = (res.error.message || '').toLowerCase();
-      const isConstraintMismatch = res.error.code === '42P10' ||
-        msg.includes('on conflict') ||
-        msg.includes('constraint') ||
-        msg.includes('unique');
-
-      if (!isConstraintMismatch) {
-        // Return non-constraint errors (e.g. invalid connection) immediately
-        return res;
-      }
-    } catch (attemptErr: any) {
-      lastError = attemptErr;
+    if (!res.error) {
+      return res;
     }
+
+    const msg = (res.error.message || '').toLowerCase();
+    const isConstraintMismatch = res.error.code === '42P10' ||
+      msg.includes('on conflict') ||
+      msg.includes('constraint') ||
+      msg.includes('unique');
+
+    if (!isConstraintMismatch) {
+      return res;
+    }
+  } catch (attemptErr: any) {
+    // Continue to scoped fallback
   }
 
-  // Strategy 2: If ON CONFLICT specification does not match any index,
-  // execute foolproof row-level update/insert strictly scoped by (user_id, id)
+  // Row-level fallback: strictly scoped by composite key (user_id, id)
   const rows = Array.isArray(payload) ? payload : [payload];
   for (const row of rows) {
     if (!row || !row.id || !row.user_id) continue;
@@ -187,25 +167,24 @@ async function executeMedicineUpsert(client: SupabaseClient, payload: any | any[
       const { data: existing } = await client
         .from('medicines')
         .select('id')
-        .eq('id', row.id)
         .eq('user_id', row.user_id)
+        .eq('id', row.id)
         .limit(1);
 
       if (existing && existing.length > 0) {
         await client
           .from('medicines')
           .update(row)
-          .eq('id', row.id)
-          .eq('user_id', row.user_id);
+          .eq('user_id', row.user_id)
+          .eq('id', row.id);
       } else {
         await client.from('medicines').insert(row);
       }
     } catch (rowErr: any) {
-      console.warn(`[SUPABASE BACKUP] Fallback row update/insert error for ${row.id}:`, rowErr.message || rowErr);
+      console.warn(`[SUPABASE BACKUP] Fallback row update/insert error for (${row.user_id}, ${row.id}):`, rowErr.message || rowErr);
     }
   }
 
-  // Fallback successfully wrote rows
   return { data: null, error: null };
 }
 
@@ -357,49 +336,60 @@ export async function backupUserConfigToSupabase(config: any): Promise<boolean> 
 }
 
 /**
- * Permanently removes a single medicine from Supabase with strict user ownership scoping.
+ * Marks a single medicine as deleted (tombstone) in Supabase with strict user ownership scoping.
+ * Tombstones prevent resurrection during bidirectional sync.
  */
 export async function deleteMedicineFromSupabase(medicineId: string, userId?: string): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client || !medicineId) return false;
 
   try {
-    let query = client.from('medicines').delete().eq('id', medicineId);
+    const tombstonePayload = {
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    let query = client.from('medicines').update(tombstonePayload).eq('id', medicineId);
     if (userId) {
       query = query.eq('user_id', userId);
     }
     const { error } = await query;
     if (error) {
-      console.warn(`[SUPABASE BACKUP] Error deleting medicine ${medicineId}:`, error.message);
+      console.warn(`[SUPABASE BACKUP] Error tombstoning medicine ${medicineId}:`, error.message);
       return false;
     }
     return true;
   } catch (err) {
-    console.warn(`[SUPABASE BACKUP] Exception deleting medicine:`, err);
+    console.warn(`[SUPABASE BACKUP] Exception tombstoning medicine:`, err);
     return false;
   }
 }
 
 /**
- * Deletes a batch of medicines from Supabase by their IDs with user ownership scoping.
+ * Tombstones a batch of medicines in Supabase by their IDs with user ownership scoping.
  */
 export async function deleteMedicinesBatchFromSupabase(medicineIds: string[], userId?: string): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client || !Array.isArray(medicineIds) || medicineIds.length === 0) return false;
 
   try {
-    let query = client.from('medicines').delete().in('id', medicineIds);
+    const tombstonePayload = {
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    let query = client.from('medicines').update(tombstonePayload).in('id', medicineIds);
     if (userId) {
       query = query.eq('user_id', userId);
     }
     const { error } = await query;
     if (error) {
-      console.warn(`[SUPABASE BACKUP] Error deleting medicines batch:`, error.message);
+      console.warn(`[SUPABASE BACKUP] Error tombstoning medicines batch:`, error.message);
       return false;
     }
     return true;
   } catch (err) {
-    console.warn(`[SUPABASE BACKUP] Exception deleting batch:`, err);
+    console.warn(`[SUPABASE BACKUP] Exception tombstoning batch:`, err);
     return false;
   }
 }
@@ -503,7 +493,7 @@ export async function deleteUserAllDataFromSupabase(userId: string): Promise<voi
 /**
  * Fetches medicines from Supabase with pagination (range/limit loop).
  */
-export async function fetchMedicinesFromSupabase(sinceIso?: string): Promise<any[]> {
+export async function fetchMedicinesFromSupabase(sinceIso?: string, userId?: string): Promise<any[]> {
   const client = getSupabaseClient();
   if (!client) return [];
 
@@ -517,6 +507,9 @@ export async function fetchMedicinesFromSupabase(sinceIso?: string): Promise<any
       let query = client.from('medicines').select('*').range(offset, offset + PAGE_SIZE - 1);
       if (sinceIso) {
         query = query.gte('updated_at', sinceIso);
+      }
+      if (userId) {
+        query = query.eq('user_id', userId);
       }
       const { data, error } = await query;
       if (error) {

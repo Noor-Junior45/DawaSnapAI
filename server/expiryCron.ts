@@ -233,7 +233,7 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
               const tokens = tokensSnap.docs.map(d => d.data().token).filter(Boolean);
               if (tokens.length > 0) {
                 const messaging = getMessaging(getAdminApp());
-                await messaging.sendEachForMulticast({
+                const multicastResponse = await messaging.sendEachForMulticast({
                   tokens,
                   notification: {
                     title: subject,
@@ -246,6 +246,35 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
                   },
                 });
                 console.log(`[BACKGROUND EXPIRY CRON] Dispatched FCM push notification to ${tokens.length} device(s) for ${schedule.email}`);
+
+                // Clean up dead/unregistered FCM tokens immediately
+                if (multicastResponse && Array.isArray(multicastResponse.responses)) {
+                  const deadTokenDocRefs: any[] = [];
+                  multicastResponse.responses.forEach((resp, idx) => {
+                    if (!resp.success && resp.error) {
+                      const code = resp.error.code;
+                      if (
+                        code === 'messaging/registration-token-not-registered' ||
+                        code === 'messaging/invalid-registration-token'
+                      ) {
+                        if (tokensSnap.docs[idx]) {
+                          deadTokenDocRefs.push(tokensSnap.docs[idx].ref);
+                        }
+                      }
+                    }
+                  });
+
+                  if (deadTokenDocRefs.length > 0) {
+                    try {
+                      const batch = db.batch();
+                      deadTokenDocRefs.forEach(ref => batch.delete(ref));
+                      await batch.commit();
+                      console.log(`[BACKGROUND EXPIRY CRON] Pruned ${deadTokenDocRefs.length} dead FCM token(s) (registration-token-not-registered) for user ${schedule.userId}`);
+                    } catch (pruneErr: any) {
+                      console.warn('[BACKGROUND EXPIRY CRON] Notice pruning dead tokens:', pruneErr.message);
+                    }
+                  }
+                }
               }
             } catch (fcmErr) {
               console.warn('[BACKGROUND EXPIRY CRON] FCM push notice:', fcmErr);
