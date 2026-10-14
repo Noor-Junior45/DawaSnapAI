@@ -51,11 +51,16 @@ import { getGeneralNotificationHTMLServer } from "./server/emailTemplates.ts";
 initFirebaseAdmin();
 
 const app = express();
-// Trust first proxy hop (e.g. Render, Cloudflare) - Never read X-Forwarded-For manually
+// Trust first proxy hop (e.g. Cloud Run, Cloudflare) - Never read X-Forwarded-For manually
 app.set('trust proxy', 1);
 
 const PORT = Number(process.env.PORT) || 3000;
-const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || "https://dawasnapai.onrender.com";
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "";
+
+// Health check endpoint for Cloud Run container lifecycle and load balancers
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ ok: true });
+});
 
 // ============================================================
 // 1. CORS ALLOWLIST CONFIGURATION & SECURITY HEADERS
@@ -68,20 +73,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Exact domain allowlist (Removed wildcards *.vercel.app and *.run.app)
+// Build allowlist only from ALLOWED_ORIGINS env var plus localhost/capacitor origins
 const EXACT_ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
   "http://localhost:5173",
   "capacitor://localhost",
-  "https://localhost",
-  "https://dawasnap.in",
-  "https://www.dawasnap.in",
-  "https://dawasnapai.onrender.com",
-  "https://dawalens.in",
-  "https://www.dawalens.in",
-  "https://dawalensai.onrender.com",
-  "https://noorpos.in",
-  "https://www.noorpos.in"
+  "https://localhost"
 ]);
 
 if (process.env.ALLOWED_ORIGINS) {
@@ -416,7 +413,7 @@ app.post("/api/account/deletion-request", strictPublicFormRateLimiter, async (re
       }
     }
 
-    const verificationLink = `${RENDER_EXTERNAL_URL}/api/account/confirm-deletion?token=${token}`;
+    const verificationLink = `${PUBLIC_BASE_URL}/api/account/confirm-deletion?token=${token}`;
 
     // Send confirmation link via Resend strictly to sanitizedEmail
     const apiKey = process.env.RESEND_API_KEY?.trim();
@@ -655,9 +652,13 @@ app.post("/api/ai/extract", aiRateLimiter, requireFirebaseAuth, authenticatedUid
 
     const result = await extractMedicineDataServer(primaryImage, ocrText, hints, cnnFeatures, extraImages);
     
-    // Server caches extraction result directly after its own Gemini call
+    // Server caches extraction result directly after its own Gemini call (awaited before response for Cloud Run CPU lifecycle)
     if (result.success && result.medicine && imageHash && typeof imageHash === 'string') {
-      saveExtractionCache(imageHash, result).catch(() => {});
+      try {
+        await saveExtractionCache(imageHash, result);
+      } catch (cacheErr) {
+        console.warn("[CACHE] Failed to save extraction cache:", cacheErr);
+      }
     }
 
     res.json(result);
@@ -674,9 +675,13 @@ app.post("/api/ai/interactions", aiRateLimiter, requireFirebaseAuth, authenticat
     }
     const result = await checkDrugInteractionsServer(medicines);
 
-    // Server caches interaction result directly after its own call
+    // Server caches interaction result directly after its own call (awaited before response for Cloud Run CPU lifecycle)
     if (result && cacheKey && typeof cacheKey === 'string') {
-      saveInteractionCache(cacheKey, result).catch(() => {});
+      try {
+        await saveInteractionCache(cacheKey, result);
+      } catch (cacheErr) {
+        console.warn("[CACHE] Failed to save interaction cache:", cacheErr);
+      }
     }
 
     res.json(result);
@@ -1085,7 +1090,7 @@ app.post("/api/notifications/register-token", requireFirebaseAuth, authenticated
 // 6. CRON ENDPOINTS (PROTECTED STRICTLY BY TIMING-SAFE CRON_SECRET)
 // ============================================================
 
-// Authenticated cron sync endpoint for Render Cron Job (ONE-WAY Firestore -> Supabase)
+// Authenticated cron sync endpoint for Cloud Scheduler / Cron Job (ONE-WAY Firestore -> Supabase)
 app.post("/api/cron/sync", async (req, res) => {
   if (!verifyCronAuth(req)) {
     return res.status(401).json({ error: "Unauthorized: A valid x-cron-secret header matching CRON_SECRET is required." });
@@ -1099,7 +1104,7 @@ app.post("/api/cron/sync", async (req, res) => {
   }
 });
 
-// Background expiry check cron endpoint
+// Background expiry check cron endpoint (Invoked by Cloud Scheduler)
 app.post("/api/cron/check-expiry", async (req, res) => {
   if (!verifyCronAuth(req)) {
     return res.status(401).json({ error: "Unauthorized: A valid x-cron-secret header matching CRON_SECRET is required." });
@@ -1126,7 +1131,7 @@ async function setupViteAndListen() {
   const http = await import("http");
   const httpServer = http.createServer(app);
 
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL && !process.env.K_SERVICE) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: {
@@ -1154,15 +1159,38 @@ async function setupViteAndListen() {
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`[DAWASNAP AI SERVER] Running on port ${PORT}`);
 
-    // Ensure only ONE host (Render or local non-serverless, NEVER Vercel serverless) runs background schedulers
-    const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+    // Treat Cloud Run as serverless: isServerless is true when process.env.K_SERVICE is set (in addition to VERCEL / AWS_LAMBDA_FUNCTION_NAME)
+    const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.K_SERVICE);
     if (!isServerless) {
       startExpiryCron();
-      console.log(`[SCHEDULER] Expiry cron worker started in process on primary server.`);
+      console.log(`[SCHEDULER] Expiry cron worker started in process on persistent server.`);
     } else {
-      console.log(`[SCHEDULER] Running in serverless mode (Vercel); in-process intervals disabled.`);
+      console.log(`[SCHEDULER] Running in serverless mode (${process.env.K_SERVICE ? 'Cloud Run' : 'Vercel/Lambda'}); in-process intervals and keep-alives disabled. Scheduled work runs via Cloud Scheduler / cron endpoints.`);
     }
   });
+
+  // Graceful shutdown: on SIGTERM close the HTTP server and exit within 10 seconds
+  const shutdown = (signal: string) => {
+    console.log(`[SHUTDOWN] Received ${signal}. Closing HTTP server gracefully...`);
+    const forceExitTimer = setTimeout(() => {
+      console.error("[SHUTDOWN] Force exiting after 10-second timeout.");
+      process.exit(1);
+    }, 10000);
+    forceExitTimer.unref();
+
+    httpServer.close((err) => {
+      clearTimeout(forceExitTimer);
+      if (err) {
+        console.error("[SHUTDOWN] Error during HTTP server close:", err);
+        process.exit(1);
+      }
+      console.log("[SHUTDOWN] HTTP server closed cleanly.");
+      process.exit(0);
+    });
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 setupViteAndListen();

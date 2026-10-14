@@ -2,7 +2,7 @@ import { MedicineForm, ChatMessage } from "../types";
 import { GoogleGenAI } from "@google/genai";
 import { performOnDeviceOcr, OcrPreExtractionHints } from "./ocrService";
 import { runImageCnnClassifier, CnnVisualFeatures } from "./imageCnnService";
-import { getApiUrl, getDirectRenderUrl } from "../utils/apiConfig";
+import { getApiUrl, getDirectBackendUrl } from "../utils/apiConfig";
 import { getAuthHeader } from "../firebase";
 import { 
   generateOfflineSlmConsultation, 
@@ -511,10 +511,10 @@ export async function extractMedicineData(
       console.warn("Primary extract fetch failed:", e);
     }
     
-    // Direct Render URL fallback if Vercel proxy rewrite is not reachable or initial fetch threw
+    // Direct Cloud Run backend URL fallback if Vercel proxy rewrite is not reachable or initial fetch threw
     if (!response || !response.ok || response.status === 404) {
       try {
-        response = await fetch(getDirectRenderUrl('/api/ai/extract'), {
+        response = await fetch(getDirectBackendUrl('/api/ai/extract'), {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -523,7 +523,7 @@ export async function extractMedicineData(
           body: extractPayload
         });
       } catch (directErr) {
-        console.warn("Direct Render backend extract attempt failed:", directErr);
+        console.warn("Direct Cloud Run backend extract attempt failed:", directErr);
       }
     }
 
@@ -602,7 +602,7 @@ export async function checkDrugInteractions(medicines: { name: string; dosage: s
 
     if (!response || !response.ok || response.status === 404) {
       try {
-        response = await fetch(getDirectRenderUrl('/api/ai/interactions'), {
+        response = await fetch(getDirectBackendUrl('/api/ai/interactions'), {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -861,10 +861,10 @@ export async function chatWithGemini(messages: ChatMessage[], userId?: string, m
       console.warn("Primary chat fetch failed:", e);
     }
 
-    // Direct Render URL fallback if Vercel proxy rewrite is unreachable or 404
+    // Direct Cloud Run backend URL fallback if Vercel proxy rewrite is unreachable or 404
     if (!response || !response.ok || response.status === 404) {
       try {
-        const directResp = await fetch(getDirectRenderUrl('/api/ai/chat'), {
+        const directResp = await fetch(getDirectBackendUrl('/api/ai/chat'), {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -876,7 +876,7 @@ export async function chatWithGemini(messages: ChatMessage[], userId?: string, m
           response = directResp;
         }
       } catch (directErr) {
-        console.warn("Direct Render backend chat attempt failed:", directErr);
+        console.warn("Direct Cloud Run backend chat attempt failed:", directErr);
       }
     }
     

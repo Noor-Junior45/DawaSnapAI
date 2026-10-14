@@ -92,10 +92,7 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
               </a>{', '}
               <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">
                 https://dawasnap.vercel.app
-              </a>{', and '}
-              <a href="https://dawalensai.onrender.com" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">
-                https://dawalensai.onrender.com
-              </a>.
+              </a>{', with backend microservices hosted on Google Cloud Run (region asia-south1).'}
             </p>
             <p className="font-semibold text-[#1c1917]">
               BY ACCESSING, INSTALLING, REGISTERING, OR USING DAWASNAP AI, YOU EXPLICITLY ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND AGREED TO BE BOUND BY ALL PROVISIONS OF THESE TERMS, INCLUDING THE MANDATORY CLINICAL DISCLAIMERS, ARBITRATION PROCEDURES, AND CLASS ACTION WAIVER.

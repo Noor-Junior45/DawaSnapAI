@@ -26,7 +26,7 @@ import ReactMarkdown from 'react-markdown';
 import { DoctorLogo } from './DoctorLogo';
 import { sendEmailAlert, getConsultationReportEmailHTML } from '../services/emailService';
 import { trackEvent } from '../utils/analytics';
-import { getApiUrl, getDirectRenderUrl } from '../utils/apiConfig';
+import { getApiUrl, getDirectBackendUrl } from '../utils/apiConfig';
 import { showRewardedAd } from '../services/admobService';
 import {
   getChatQuota,
@@ -255,7 +255,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onClose, medicines, user, us
 
         if (!res || !res.ok) {
           try {
-            const directRes = await fetch(getDirectRenderUrl('/api/ai/key-status'));
+            const directRes = await fetch(getDirectBackendUrl('/api/ai/key-status'));
             if (directRes.ok) {
               res = directRes;
             }

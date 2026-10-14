@@ -4,7 +4,7 @@
 **Last Revised:** October 3, 2026  
 **Operating Developer & Service Provider:** MD NOOR HASSAN  
 **Contact Email:** `newluckypharmacy@gmail.com`  
-**Service Domains:** `https://dawasnap.vercel.app` & `https://dawasnapai.onrender.com`  
+**Service Domains:** `https://dawasnap.vercel.app` (Google Cloud Run backend, region `asia-south1`)  
 **Android Application Package:** `in.dawasnap.app`  
 **Statutory Deletion Portal:** `https://dawasnap.vercel.app/delete-account`  
 **Governing Law:** Republic of India  

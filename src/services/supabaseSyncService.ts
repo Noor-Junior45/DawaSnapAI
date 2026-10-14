@@ -1,6 +1,6 @@
 import { User } from 'firebase/auth';
 import { Medicine } from '../types';
-import { getApiUrl, getDirectRenderUrl } from '../utils/apiConfig';
+import { getApiUrl, getDirectBackendUrl } from '../utils/apiConfig';
 import { getAuthHeader } from '../firebase';
 
 let debounceTimer: any = null;
@@ -23,8 +23,8 @@ export async function getSupabaseBackupStatus(): Promise<{ configured: boolean; 
     if (res.ok) {
       return await res.json();
     }
-    // Fallback direct Render call on native/cross-origin
-    const directRes = await fetch(getDirectRenderUrl('/api/backup/supabase/status'));
+    // Fallback direct backend call on native/cross-origin
+    const directRes = await fetch(getDirectBackendUrl('/api/backup/supabase/status'));
     if (directRes.ok) {
       return await directRes.json();
     }
@@ -35,7 +35,7 @@ export async function getSupabaseBackupStatus(): Promise<{ configured: boolean; 
 }
 
 /**
- * Syncs an entire batch of medicines to the Render server -> Supabase backup.
+ * Syncs an entire batch of medicines to the Cloud Run server -> Supabase backup.
  */
 export async function syncMedicinesToSupabase(medicines: Medicine[], user: User): Promise<boolean> {
   if (!user || !Array.isArray(medicines)) return false;
@@ -55,7 +55,7 @@ export async function syncMedicinesToSupabase(medicines: Medicine[], user: User)
     });
 
     if (!response.ok && response.status === 404) {
-      response = await fetch(getDirectRenderUrl('/api/backup/supabase/sync-medicines'), {
+      response = await fetch(getDirectBackendUrl('/api/backup/supabase/sync-medicines'), {
         method: 'POST',
         headers,
         body: payload,
@@ -115,7 +115,7 @@ export async function syncSingleMedicineToSupabase(medicine: Medicine, user: Use
     });
 
     if (!response.ok && response.status === 404) {
-      response = await fetch(getDirectRenderUrl('/api/backup/supabase/sync-medicine'), {
+      response = await fetch(getDirectBackendUrl('/api/backup/supabase/sync-medicine'), {
         method: 'POST',
         headers,
         body: payload,
@@ -150,7 +150,7 @@ export async function syncConfigToSupabase(config: any, user: User): Promise<boo
     });
 
     if (!response.ok && response.status === 404) {
-      response = await fetch(getDirectRenderUrl('/api/backup/supabase/sync-config'), {
+      response = await fetch(getDirectBackendUrl('/api/backup/supabase/sync-config'), {
         method: 'POST',
         headers,
         body: payload,
@@ -185,7 +185,7 @@ export async function deleteMedicineFromSupabase(medicineId: string, user: User)
     });
 
     if (!response.ok && response.status === 404) {
-      response = await fetch(getDirectRenderUrl('/api/backup/supabase/delete-medicine'), {
+      response = await fetch(getDirectBackendUrl('/api/backup/supabase/delete-medicine'), {
         method: 'POST',
         headers,
         body: payload,
@@ -220,7 +220,7 @@ export async function deleteMedicinesBatchFromSupabase(medicineIds: string[], us
     });
 
     if (!response.ok && response.status === 404) {
-      response = await fetch(getDirectRenderUrl('/api/backup/supabase/delete-medicines-batch'), {
+      response = await fetch(getDirectBackendUrl('/api/backup/supabase/delete-medicines-batch'), {
         method: 'POST',
         headers,
         body: payload,
@@ -272,7 +272,7 @@ export async function triggerFullTwoWaySync(): Promise<{ success: boolean; pushe
     });
 
     if (!res.ok && res.status === 404) {
-      res = await fetch(getDirectRenderUrl('/api/backup/two-way-sync'), {
+      res = await fetch(getDirectBackendUrl('/api/backup/two-way-sync'), {
         method: 'POST',
         headers: { ...authHeader },
       });
@@ -300,7 +300,7 @@ export async function triggerPullFromSupabase(): Promise<{ success: boolean; upd
     });
 
     if (!res.ok && res.status === 404) {
-      res = await fetch(getDirectRenderUrl('/api/backup/pull-from-supabase'), {
+      res = await fetch(getDirectBackendUrl('/api/backup/pull-from-supabase'), {
         method: 'POST',
         headers: { ...authHeader },
       });

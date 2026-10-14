@@ -651,7 +651,7 @@ export default function App() {
       try {
         localStorage.setItem('dawasnap_cached_medicines', JSON.stringify(uniqueMeds));
       } catch {}
-      // Automatically sync all medicine updates to Supabase PostgreSQL backup via Render server
+      // Automatically sync all medicine updates to Supabase PostgreSQL backup via Cloud Run server
       if (user) {
         triggerDebouncedMedicinesSync(uniqueMeds, user);
       }
@@ -3328,7 +3328,7 @@ export default function App() {
                       <div>
                         <h4 className="font-extrabold text-[#1f1f1f] text-xs uppercase tracking-wider mb-1">Google OAuth &amp; Data Safety Compliance</h4>
                         <p className="text-xs text-emerald-850/80 leading-relaxed font-semibold">
-                          DawaSnap AI is dedicated to protecting your personal information and health privacy. This policy applies to our application hosted at dawasnap.vercel.app and dawasnapai.onrender.com.
+                          DawaSnap AI is dedicated to protecting your personal information and health privacy. This policy applies to our application hosted at dawasnap.vercel.app and Google Cloud Run backend.
                         </p>
                       </div>
                     </div>

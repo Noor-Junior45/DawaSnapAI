@@ -280,11 +280,12 @@ When a user initiates account deletion (`POST /api/user/purge-data`), the system
 2. **Manual Sync**:
    - Triggered from the UI Settings modal (`src/components/SettingsModal.tsx:handleManualSupabaseSync`).
    - Calls `POST /api/backup/supabase/sync-medicines` followed by `POST /api/backup/two-way-sync` (scoped strictly to `req.userId`).
-3. **Server Schedulers**:
+3. **Server Schedulers & Cloud Scheduler**:
    - Managed in `server.ts:setupViteAndListen`.
-   - Evaluates `const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)`.
-   - On persistent hosts (Render / container), `server/expiryCron.ts:startExpiryCron()` runs in-process once every hour (`60 * 60 * 1000`).
-   - On serverless hosts (Vercel), in-process intervals are disabled; scheduled jobs rely on external cron triggering `/api/cron/sync` and `/api/cron/check-expiry` with `CRON_SECRET` in header `x-cron-secret`.
+   - Evaluates `const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.K_SERVICE)`.
+   - On Google Cloud Run (region `asia-south1`, where `K_SERVICE` is set) and serverless environments, `isServerless` is true: in-process intervals and keep-alives are strictly disabled because container CPU is throttled when no requests are active.
+   - All scheduled background tasks run exclusively via **Google Cloud Scheduler** making authenticated HTTP requests to `POST /api/cron/sync` and `POST /api/cron/check-expiry` with header `x-cron-secret`.
+   - On persistent non-serverless local environments, `server/expiryCron.ts:startExpiryCron()` runs in-process once every hour (`60 * 60 * 1000`).
 
 ---
 
@@ -324,12 +325,28 @@ When a user initiates account deletion (`POST /api/user/purge-data`), the system
 - `SUPABASE_URL`: HTTPS URL of your Supabase project (e.g. `https://xyz.supabase.co`).
 - `SUPABASE_SERVICE_ROLE_KEY`: Service-role secret key for Supabase (bypasses RLS on server; never exposed to browser).
 - `CRON_SECRET`: High-entropy shared secret for cron jobs and disaster recovery endpoints.
-- `FIREBASE_SERVICE_ACCOUNT_KEY`: Service account JSON string for Firebase Admin SDK.
+- `FIREBASE_SERVICE_ACCOUNT_KEY`: Service account JSON string for Firebase Admin SDK (optional on Cloud Run if attached Service Account is used via Application Default Credentials).
 - `RESEND_API_KEY`: API key for automated expiry alert emails.
+- `PUBLIC_BASE_URL`: Canonical public API base URL (e.g. for deletion verification links).
+- `ALLOWED_ORIGINS`: Comma-separated CORS allowed domains (e.g. `https://dawasnap.vercel.app,https://dawasnap.in`).
 
 ---
 
 ## 15. Changelog
+
+- **2026-10-14**:
+  - Prepared project for production deployment on Google Cloud Run (region `asia-south1`).
+  - Set `isServerless` to `true` when `process.env.K_SERVICE` is set; disabled in-process intervals and keep-alives. Scheduled work runs strictly via Google Cloud Scheduler triggering `/api/cron/*` endpoints.
+  - Eliminated unawaited background operations after responses (`saveExtractionCache` and `saveInteractionCache`) to prevent Cloud Run post-response CPU throttling.
+  - Added `GET /healthz` endpoint returning `{ ok: true }` for container lifecycle and load balancers.
+  - Added graceful shutdown handling on `SIGTERM` with 10-second timeout.
+  - Added Application Default Credentials (`applicationDefault()`) initialization in `server/firebaseAdmin.ts` so Cloud Run uses its attached service account.
+  - Renamed `RENDER_EXTERNAL_URL` to `PUBLIC_BASE_URL` and removed all hardcoded `onrender.com` references from server code.
+  - Built CORS allowlist strictly from `ALLOWED_ORIGINS` env var plus standard localhost/capacitor origins.
+  - Renamed client helper `RENDER_BACKEND_URL` to `BACKEND_URL` and `getDirectRenderUrl` to `getDirectBackendUrl` with `https://REPLACE_WITH_MY_API_DOMAIN` fallback.
+  - Updated `vercel.json` rewrite destination to `https://REPLACE_WITH_MY_API_DOMAIN/api/$1`.
+  - Added production `Dockerfile` (node:20-slim) and `.dockerignore`.
+  - Updated documentation across `USER_GUIDE.md`, `TERMS_OF_SERVICE.md`, `PrivacyPolicyPage.tsx`, `TermsOfServicePage.tsx`, and `.env.example`.
 
 - **2026-10-13**:
   - Scoped `/api/backup/pull-from-supabase` and `/api/backup/two-way-sync` to `req.userId`.

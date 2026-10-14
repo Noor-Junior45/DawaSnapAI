@@ -4,9 +4,9 @@
 -- Run this complete script in Supabase Dashboard -> SQL Editor -> Click Run
 -- ==============================================================================
 
--- 1. Create Medicines Backup Table (Composite Primary Key: user_id, id for strict isolation)
+-- 1. Create Medicines Backup Table (Primary Key: id, Unique: user_id, id)
 CREATE TABLE IF NOT EXISTS public.medicines (
-    id VARCHAR(100) NOT NULL,
+    id VARCHAR(100) PRIMARY KEY,
     user_id VARCHAR(128) NOT NULL,
     name VARCHAR(255) NOT NULL,
     dosage VARCHAR(100),
@@ -30,22 +30,13 @@ CREATE TABLE IF NOT EXISTS public.medicines (
     raw_payload JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (user_id, id)
+    CONSTRAINT medicines_user_id_id_key UNIQUE (user_id, id)
 );
 
--- Ensure unique constraint and unique index exist on (user_id, id) even if medicines table was previously created with PRIMARY KEY (id)
+-- Ensure UNIQUE constraint named medicines_user_id_id_key exists on (user_id, id)
 DO $$ 
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'medicines') THEN
-        -- 1. Attempt to upgrade primary key if it was previously single-column
-        BEGIN
-            ALTER TABLE public.medicines DROP CONSTRAINT IF EXISTS medicines_pkey;
-            ALTER TABLE public.medicines ADD PRIMARY KEY (user_id, id);
-        EXCEPTION WHEN OTHERS THEN
-            NULL;
-        END;
-
-        -- 2. Add explicit unique constraint on (user_id, id) if not already present
         IF NOT EXISTS (
             SELECT 1 FROM pg_constraint 
             WHERE conrelid = 'public.medicines'::regclass 
@@ -57,18 +48,8 @@ BEGIN
                 NULL;
             END;
         END IF;
-
-        -- 3. Ensure unique index exists on (user_id, id)
-        BEGIN
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_medicines_user_id_id_unique ON public.medicines (user_id, id);
-        EXCEPTION WHEN OTHERS THEN
-            NULL;
-        END;
     END IF;
 END $$;
-
--- Ensure explicit UNIQUE index exists on composite key (user_id, id) for ON CONFLICT target
-CREATE UNIQUE INDEX IF NOT EXISTS idx_medicines_user_id_id ON public.medicines (user_id, id);
 
 -- Indexes for high-performance querying & analytics
 CREATE INDEX IF NOT EXISTS idx_medicines_user_id ON public.medicines(user_id);
@@ -105,33 +86,57 @@ CREATE TABLE IF NOT EXISTS public.user_push_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON public.user_push_tokens(user_id);
 
--- 4. Create Users Table (Synced from Firebase Auth Admin listUsers)
+-- 4. Create Users Table (Synced from Firebase Auth Admin)
 CREATE TABLE IF NOT EXISTS public.users (
-    uid VARCHAR(128) PRIMARY KEY,
-    email VARCHAR(255),
-    display_name VARCHAR(255),
+    user_id TEXT PRIMARY KEY,
+    email TEXT,
+    display_name TEXT,
     photo_url TEXT,
-    phone_number VARCHAR(50),
+    phone_number TEXT,
     email_verified BOOLEAN DEFAULT FALSE,
     disabled BOOLEAN DEFAULT FALSE,
-    provider_data JSONB,
+    provider_ids TEXT[],
+    last_sign_in_time TIMESTAMPTZ,
     metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Migration helper if table was previously created with old schema
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'uid') 
+           AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'user_id') THEN
+            ALTER TABLE public.users RENAME COLUMN uid TO user_id;
+        END IF;
+        ALTER TABLE public.users DROP COLUMN IF EXISTS provider_data;
+        ALTER TABLE public.users ADD COLUMN IF NOT EXISTS provider_ids TEXT[];
+        ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_sign_in_time TIMESTAMPTZ;
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 
 -- 5. Create Medicine Audit History Table
 CREATE TABLE IF NOT EXISTS public.medicine_history (
-    id VARCHAR(150) PRIMARY KEY,
-    medicine_id VARCHAR(100) NOT NULL,
-    user_id VARCHAR(128),
-    action VARCHAR(50) DEFAULT 'EDIT',
+    id TEXT PRIMARY KEY,
+    medicine_id TEXT NOT NULL,
+    user_id TEXT,
+    action TEXT,
     details TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
-    raw_payload JSONB
+    raw_payload JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration helper if table was previously created without created_at
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'medicine_history') THEN
+        ALTER TABLE public.medicine_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_medicine_history_user ON public.medicine_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_medicine_history_med ON public.medicine_history(medicine_id);

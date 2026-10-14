@@ -27,7 +27,7 @@
     },
     {
       "source": "/api/(.*)",
-      "destination": "https://dawalensai.onrender.com/api/$1"
+      "destination": "https://REPLACE_WITH_MY_API_DOMAIN/api/$1"
     },
     {
       "source": "/((?!api/|.*\\.[a-zA-Z0-9]+$).*)",

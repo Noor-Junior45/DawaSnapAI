@@ -83,10 +83,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
               </a>{', '}
               <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">
                 https://dawasnap.vercel.app
-              </a>{', and '}
-              <a href="https://dawalensai.onrender.com" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">
-                https://dawalensai.onrender.com
-              </a>.
+              </a>{', with secure API microservices running on Google Cloud Run (region asia-south1).'}
             </p>
             <p>
               This Policy details our comprehensive compliance framework under the <strong>Google Play Store Health &amp; Medical Apps Policy</strong>, the <strong>Google API Services User Data Policy</strong> (including Limited Use requirements), the <strong>India Digital Personal Data Protection (DPDP) Act, 2023</strong>, and the <strong>General Data Protection Regulation (GDPR - EU/EEA 2016/679)</strong>.
@@ -536,9 +533,9 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
                     <td className="p-3.5 font-medium align-top">COPPA, GDPR &amp; DPDP Compliant (Non-personalized ads by default for privacy).</td>
                   </tr>
                   <tr className="hover:bg-[#f3ede1]/60 transition-colors">
-                    <td className="p-3.5 font-bold text-[#1c1917] whitespace-nowrap align-top bg-[#f7f2e8]/70">Vercel Inc. &amp; Render Services</td>
-                    <td className="p-3.5 align-top">PWA hosting, SSL termination, and secure API reverse-proxy routing.</td>
-                    <td className="p-3.5 font-medium align-top">ISO 27001, TLS 1.3 encryption.</td>
+                    <td className="p-3.5 font-bold text-[#1c1917] whitespace-nowrap align-top bg-[#f7f2e8]/70">Vercel Inc. &amp; Google Cloud Run</td>
+                    <td className="p-3.5 align-top">PWA edge hosting, containerized backend microservices (region asia-south1), SSL termination, and reverse-proxy routing.</td>
+                    <td className="p-3.5 font-medium align-top">ISO 27001, SOC 1/2/3, TLS 1.3 encryption.</td>
                   </tr>
                 </tbody>
               </table>

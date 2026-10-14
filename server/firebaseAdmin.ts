@@ -30,18 +30,18 @@ export function initFirebaseAdmin(): App {
     }
   }
 
-  if (credentialsPath) {
-    try {
-      adminApp = initializeApp({
-        credential: applicationDefault(),
-        projectId: firebaseConfig.projectId,
-      });
-      hasServiceAccount = true;
-      console.log('[FIREBASE ADMIN] Initialized with applicationDefault credentials.');
-      return adminApp;
-    } catch (e) {
-      console.error('[FIREBASE ADMIN ERROR] Failed to load applicationDefault credentials:', e);
-    }
+  // If no service-account env var is set, initialize with Application Default Credentials (applicationDefault()),
+  // so Cloud Run uses its attached service account and no JSON key is needed. hasServiceAccountConfigured() returns true.
+  try {
+    adminApp = initializeApp({
+      credential: applicationDefault(),
+      projectId: firebaseConfig.projectId,
+    });
+    hasServiceAccount = true;
+    console.log('[FIREBASE ADMIN] Initialized with Application Default Credentials (Cloud Run attached service account).');
+    return adminApp;
+  } catch (e) {
+    console.warn('[FIREBASE ADMIN] applicationDefault credentials unavailable, falling back to project ID only:', e);
   }
 
   // Fallback: Initialize with projectId only.
@@ -55,6 +55,7 @@ export function initFirebaseAdmin(): App {
     } else {
       adminApp = existing[0];
     }
+    hasServiceAccount = false;
     console.log(`[FIREBASE ADMIN] Initialized in token-verification mode for project: ${firebaseConfig.projectId}`);
   } catch (e) {
     console.error('[FIREBASE ADMIN ERROR] Failed to initialize Firebase Admin:', e);

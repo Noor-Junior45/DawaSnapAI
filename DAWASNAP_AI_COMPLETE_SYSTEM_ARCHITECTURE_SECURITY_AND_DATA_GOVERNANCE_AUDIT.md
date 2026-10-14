@@ -32,9 +32,9 @@ DawaSnap AI is an intelligent pharmaceutical management, expiration monitoring, 
                                   ▼                │
 +---------------------------------------------------------------------------------------+
 |                                   BACKEND TIER                                        |
-|  - Node.js & Express 4 Runtime (Vercel Serverless Gateway & Render Cloud Daemon)       |
+|  - Node.js & Express 4 Runtime (Vercel Edge & Google Cloud Run asia-south1)             |
 |  - Endpoints: /api/ai/extract, /api/ai/chat, /api/ai/interactions, /api/send-email     |
-|  - Automated 24/7 Expiry Cron Worker (server/expiryCron.ts - hourly background check) |
+|  - Automated Expiry Check via Cloud Scheduler -> /api/cron/check-expiry                 |
 |  - Single Canonical Google AI Studio Key Manager (Rotation & Resilient Model Fallbacks)|
 +---------------------------------------------------------------------------------------+
                                   │                │
@@ -241,8 +241,8 @@ DawaSnap AI implements a hybrid notification model optimized for life-safety and
 |                                    NOTIFICATION MODES                                   |
 +-----------------------------------------------------------------------------------------+
 | 1. LOCAL ALARMS (AlarmManager)               | 2. CLOUD EXPIRY PUSH (Firebase FCM)       |
-| - Scheduled on device via Capacitor Local     | - Dispatched by server background cron  |
-|   Notifications & Android AlarmManager.      |   running 24/7 on Render.                |
+| - Scheduled on device via Capacitor Local     | - Dispatched via Cloud Scheduler on      |
+|   Notifications & Android AlarmManager.      |   Cloud Run (region asia-south1).        |
 | - Wakes device for daily medication doses.   | - Dispatches 30-day, 7-day & expired     |
 | - 100% offline, zero internet required.       |   pharmaceutical warnings.               |
 | - Zero server communication.                 | - Operates even when app is closed.      |

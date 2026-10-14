@@ -1,7 +1,7 @@
 # DawaSnap AI — Official User Guide & Operating Manual
 **Document Reference:** `DAWASNAP-GUIDE-2026-V2.5`  
 **Application Identity:** DawaSnap AI (Android Package: `in.dawasnap.app`)  
-**Web Application:** `https://dawasnap.vercel.app` & `https://dawasnapai.onrender.com`  
+**Web Application:** `https://dawasnap.vercel.app` (Backend hosted on Google Cloud Run, region `asia-south1`)  
 **Support Desk:** `newluckypharmacy@gmail.com`  
 **Account Deletion Portal:** `https://dawasnap.vercel.app/delete-account`  
 
@@ -136,8 +136,9 @@ DawaSnap AI features an automated multi-stage safety alert policy to ensure zero
        └─► 0 to -14 Days:        STAGE 3 — EXPIRED ADVISORY (Do Not Consume & Safe Disposal)
 ```
 
-### 5.1 Automated Email Delivery (Resend API)
+### 5.1 Automated Email Delivery (Resend API & Google Cloud Scheduler)
 - Automated alerts are sent from `DawaSnap AI <alerts@noorpos.in>` (or `onboarding@resend.dev`).
+- **Cloud Run & Cloud Scheduler Architecture:** The backend service is hosted on Google Cloud Run (region `asia-south1`). Google Cloud Scheduler periodically triggers the authenticated cron endpoints (`POST /api/cron/check-expiry` and `POST /api/cron/sync` with `x-cron-secret`) to evaluate expiry milestones and synchronize records without requiring persistent idle server processes.
 - **Atomic Deduplication:** Alerts are tracked on the server to guarantee strictly **one email per medicine per stage**. You will never receive repetitive duplicate emails for the same batch.
 - **Safe Chemical Disposal Guidance:** When a medicine expires, the email provides critical safe disposal advisories (e.g., participating in pharmacy take-back drop-offs, mixing with coffee grounds in sealed pouches, and strictly avoiding flushing down household plumbing).
 
