@@ -21,7 +21,7 @@ import {
   auth, db, signOut, onAuthStateChanged, 
   collection, doc, setDoc, deleteDoc, updateDoc, writeBatch, onSnapshot, query, where, orderBy, getDocs, getDoc, User,
   handleFirestoreError, OperationType, deleteField, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail,
-  serverTimestamp, reauthenticateWithPopup, reauthenticateWithCredential, GoogleAuthProvider, getAuthHeader
+  serverTimestamp, reauthenticateWithPopup, reauthenticateWithCredential, signInWithCredential, GoogleAuthProvider, getAuthHeader
 } from './firebase';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DoctorLogo } from './components/DoctorLogo';
@@ -80,12 +80,51 @@ const getInitialPublicPage = (): PublicPageType => {
   return null;
 };
 
+const getCachedUser = (): User | null => {
+  try {
+    const hasSession = localStorage.getItem('dawasnap_has_auth_session') === 'true';
+    const cachedStr = localStorage.getItem('dawasnap_cached_user');
+    if (hasSession && cachedStr) {
+      const parsed = JSON.parse(cachedStr);
+      if (parsed && typeof parsed.uid === 'string') {
+        return parsed as unknown as User;
+      }
+    }
+  } catch {}
+  return null;
+};
+
+const getCachedMedicines = (): Medicine[] => {
+  try {
+    const cachedStr = localStorage.getItem('dawasnap_cached_medicines');
+    if (cachedStr) {
+      const parsed = JSON.parse(cachedStr);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return [];
+};
+
 export default function App() {
   const isNative = Capacitor.isNativePlatform();
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [user, setUser] = useState<User | null>(() => getCachedUser());
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('dawasnap_has_auth_session') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [publicPage, setPublicPage] = useState<PublicPageType>(getInitialPublicPage);
   const [showAuthScreen, setShowAuthScreen] = useState<boolean>(() => {
+    // If the user is already logged in, NEVER show the auth screen on startup
+    try {
+      if (localStorage.getItem('dawasnap_has_auth_session') === 'true') {
+        return false;
+      }
+    } catch {}
     if (Capacitor.isNativePlatform()) return true;
     try {
       const params = new URLSearchParams(window.location.search);
@@ -94,7 +133,7 @@ export default function App() {
       return false;
     }
   });
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [medicines, setMedicines] = useState<Medicine[]>(() => getCachedMedicines());
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -276,25 +315,60 @@ export default function App() {
       }
     }, fallbackDuration);
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      resolved = true;
-      clearTimeout(fallbackTimer);
-      setUser(currentUser);
-      setIsAuthReady(true);
-      setIsGoogleLoggingIn(false);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
+        resolved = true;
+        clearTimeout(fallbackTimer);
+        setUser(currentUser);
+        setIsAuthReady(true);
+        setIsGoogleLoggingIn(false);
         try {
           localStorage.setItem('dawasnap_has_auth_session', 'true');
+          localStorage.setItem('dawasnap_cached_user', JSON.stringify({
+            uid: currentUser.uid,
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            photoURL: currentUser.photoURL,
+          }));
         } catch {}
         setCrashReportingUser(currentUser.uid);
+        if (isNative) {
+          SplashScreen.hide().catch(() => {});
+        }
       } else {
+        // currentUser is null: On native Android, check if native plugin has an active session before clearing
+        if (isNative && hasPreviousSession) {
+          try {
+            const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
+            const nativeUser = await FirebaseAuthentication.getCurrentUser();
+            if (nativeUser?.user) {
+              const idTokenRes = await FirebaseAuthentication.getIdToken().catch(() => null);
+              if (idTokenRes?.token) {
+                const credential = GoogleAuthProvider.credential(idTokenRes.token);
+                await signInWithCredential(auth, credential).catch(() => {});
+                return; // Wait for the subsequent onAuthStateChanged triggered by signInWithCredential
+              }
+            }
+          } catch (syncErr) {
+            console.warn('Native session recovery attempt:', syncErr);
+          }
+        }
+
+        // Confirmed signed out or guest
+        resolved = true;
+        clearTimeout(fallbackTimer);
+        setUser(null);
+        setIsAuthReady(true);
+        setIsGoogleLoggingIn(false);
         try {
           localStorage.removeItem('dawasnap_has_auth_session');
+          localStorage.removeItem('dawasnap_cached_user');
+          localStorage.removeItem('dawasnap_cached_medicines');
         } catch {}
         setCrashReportingUser(null);
-      }
-      if (isNative) {
-        SplashScreen.hide().catch(() => {});
+        if (isNative) {
+          SplashScreen.hide().catch(() => {});
+        }
       }
     });
 
@@ -574,6 +648,9 @@ export default function App() {
       // Deduplicate by ID to prevent React "duplicate key" warnings during sync lag or accidental duplicates
       const uniqueMeds = Array.from(new Map(medsData.map(m => [m.id, m])).values());
       setMedicines(uniqueMeds);
+      try {
+        localStorage.setItem('dawasnap_cached_medicines', JSON.stringify(uniqueMeds));
+      } catch {}
       // Automatically sync all medicine updates to Supabase PostgreSQL backup via Render server
       if (user) {
         triggerDebouncedMedicinesSync(uniqueMeds, user);
@@ -1866,7 +1943,7 @@ export default function App() {
     return items;
   }, [medicines]);
 
-  if (!isAuthReady) {
+  if (!isAuthReady && !user) {
     return (
       <div className="min-h-screen bg-[#faf8f5] flex flex-col items-center justify-center p-6 select-none animate-fadeIn">
         <div className="w-16 h-16 rounded-2xl bg-[#0f9d58] flex items-center justify-center shadow-lg shadow-[#0f9d58]/20 mb-4 animate-pulse">
