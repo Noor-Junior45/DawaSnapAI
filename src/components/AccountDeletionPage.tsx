@@ -380,7 +380,7 @@ export const AccountDeletionPage: React.FC<AccountDeletionPageProps> = ({
         {/* Compliance & Contact */}
         <div className="p-6 rounded-2xl bg-slate-100 border border-slate-200 text-xs text-slate-600 space-y-2">
           <div className="font-bold text-slate-800">Operator &amp; Grievance Redressal</div>
-          <div><strong>Operator:</strong> Noor Technologies (MD Hassan)</div>
+          <div><strong>Operator:</strong> DawaSnap (MD Hassan)</div>
           <div><strong>Grievance Officer:</strong> MD Hassan</div>
           <div><strong>Contact Email:</strong> {supportEmail}</div>
           <div><strong>Physical Address:</strong> India</div>

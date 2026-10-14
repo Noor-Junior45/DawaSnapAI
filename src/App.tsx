@@ -35,6 +35,8 @@ import { TermsOfServicePage } from './components/TermsOfServicePage';
 import { AccountDeletionPage } from './components/AccountDeletionPage';
 import { RecentlyDeletedPage } from './components/RecentlyDeletedPage';
 import { LandingPage } from './components/LandingPage';
+import { AboutPage } from './components/AboutPage';
+import { FaqPage } from './components/FaqPage';
 
 import { triggerLightHaptic, triggerSuccessHaptic } from './utils/haptics';
 import { localImageStorage } from './services/localImageStorage';
@@ -56,7 +58,7 @@ import {
   deleteMedicineFromSupabase 
 } from './services/supabaseSyncService';
 
-type PublicPageType = 'guide' | 'privacy' | 'terms' | 'delete-account' | 'recently-deleted' | null;
+type PublicPageType = 'guide' | 'privacy' | 'terms' | 'delete-account' | 'recently-deleted' | 'about' | 'faq' | null;
 
 const getInitialPublicPage = (): PublicPageType => {
   try {
@@ -65,6 +67,8 @@ const getInitialPublicPage = (): PublicPageType => {
     if (pageParam === 'guide' || pageParam === 'manual') return 'guide';
     if (pageParam === 'privacy') return 'privacy';
     if (pageParam === 'terms') return 'terms';
+    if (pageParam === 'about') return 'about';
+    if (pageParam === 'faq') return 'faq';
     if (pageParam === 'delete-account' || pageParam === 'account-delete' || pageParam === 'deleteaccount') return 'delete-account';
     if (pageParam === 'recently-deleted' || pageParam === 'deleted' || pageParam === 'trash') return 'recently-deleted';
 
@@ -72,6 +76,8 @@ const getInitialPublicPage = (): PublicPageType => {
     if (pathname.includes('/guide') || pathname.includes('/manual')) return 'guide';
     if (pathname.includes('/privacy')) return 'privacy';
     if (pathname.includes('/terms')) return 'terms';
+    if (pathname.includes('/about')) return 'about';
+    if (pathname.includes('/faq')) return 'faq';
     if (pathname.includes('/delete-account') || pathname.includes('/account-delete') || pathname.includes('/accountdelete')) return 'delete-account';
     if (pathname.includes('/recently-deleted') || pathname.includes('/deleted') || pathname.includes('/trash')) return 'recently-deleted';
   } catch (e) {
@@ -2157,6 +2163,12 @@ export default function App() {
   if (publicPage === 'terms') {
     return <TermsOfServicePage onBack={handleBackFromPublicPage} isLoggedIn={!!user} />;
   }
+  if (publicPage === 'about') {
+    return <AboutPage onBack={handleBackFromPublicPage} isLoggedIn={!!user} />;
+  }
+  if (publicPage === 'faq') {
+    return <FaqPage onBack={handleBackFromPublicPage} isLoggedIn={!!user} />;
+  }
   if (publicPage === 'delete-account') {
     return (
       <AccountDeletionPage 
@@ -3046,6 +3058,8 @@ export default function App() {
               onResetToHome={() => { setFilter('all'); setSearchQuery(''); setIsLikedOnly(false); }}
               onToggleLikedOnly={() => setIsLikedOnly(!isLikedOnly)}
               isLikedOnly={isLikedOnly}
+              onOpenAbout={() => { triggerLightHaptic(); setOpenedFromSettings(true); setIsSettingsOpen(false); navigateToPublicPage('about'); }}
+              onOpenFaq={() => { triggerLightHaptic(); setOpenedFromSettings(true); setIsSettingsOpen(false); navigateToPublicPage('faq'); }}
               onOpenGuide={() => { triggerLightHaptic(); setOpenedFromSettings(true); setIsSettingsOpen(false); navigateToPublicPage('guide'); }}
               onOpenPrivacy={() => { triggerLightHaptic(); setOpenedFromSettings(true); setIsSettingsOpen(false); navigateToPublicPage('privacy'); }}
               onOpenTerms={() => { triggerLightHaptic(); setOpenedFromSettings(true); setIsSettingsOpen(false); navigateToPublicPage('terms'); }}
@@ -3438,7 +3452,7 @@ export default function App() {
                       <div className="pt-3 border-t border-slate-100">
                         <h5 className="font-extrabold text-slate-800 text-[13px] uppercase tracking-wider mb-1">4. Governing Law &amp; Contact</h5>
                         <p className="text-slate-500 leading-relaxed">
-                          Operator: <strong>Noor Technologies (MD Hassan)</strong>
+                          Operator: <strong>DawaSnap (MD Hassan)</strong>
                         </p>
                         <p className="font-bold text-slate-800 mt-1 select-all">
                           Contact Email: newluckypharmacy@gmail.com

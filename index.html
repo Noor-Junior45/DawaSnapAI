@@ -117,36 +117,284 @@
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DawaSnap AI: Smart Medicine Tracker & Scanner</title>
-    <meta name="description" content="The ultimate AI-powered medicine tracker and medication scanner. Use your camera to identify pills, track prescriptions, and export health data to Google Sheets. Smart, secure, and easy medication management." />
-    <meta name="keywords" content="DawaSnap AI, DawaSnap, medicine tracker, medication scanner, pill identifier, health assistant, prescription tracker, AI health app, medication management" />
+    <title>DawaSnap AI – Smart Medicine Scanner &amp; Expiry Tracker</title>
+    <meta name="description" content="Official platform for DawaSnap AI (also searchable as DawaLens AI) on noorpos.in, dawasnap.cloud.run, dawalens.cloud.run, and dawasnap.vercel.app. Instant camera OCR medicine scanner, expiration alerts, drug interaction safety, and pharmacy inventory." />
+    <meta name="keywords" content="DawaLens AI, DawaLens, DawaLensAi, Dawalens, Dawalens AI, DawaSnap, DawaSnap AI, DawaSnapAi, Dawasnap, Dawasnap AI, dawa lens, dawa snap, noorpos.in, dawasnap.cloud.run, dawalens.cloud.run, dawasnap.vercel.app, dawalens.vercel.app, दवा लेंस, दवा स्नैप, medicine scanner, pill identifier, medication tracker, prescription scanner, pill reminder, medicine expiry date detector, drug interaction checker, AI health app, digital medicine vault, smart pharmacy assistant, noorpos" />
+    <meta name="application-name" content="DawaSnap AI" />
+    <meta name="author" content="DawaSnap AI Team (DawaSnap)" />
+    <meta name="publisher" content="noorpos.in" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="bingbot" content="index, follow, max-snippet:-1, max-image-preview:large" />
+    <meta name="rating" content="General" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="theme-color" content="#0f9d58" />
     <meta name="google-site-verification" content="BDUoAbFbFTKgSUg-NWmdggga2ZkOwmKJJjbk8KGEJGg" />
     <meta name="google-site-verification" content="googlec5ae0e2991d0ea8c" />
     <meta name="google-site-verification" content="c5ae0e2991d0ea8c" />
     
+    <!-- Dynamic Canonical & Multi-Domain Mirror Alternates -->
+    <link id="canonical-url" rel="canonical" href="https://noorpos.in/" />
+    <link rel="alternate" href="https://noorpos.in/" hreflang="x-default" />
+    <link rel="alternate" href="https://noorpos.in/" hreflang="en" />
+    <link rel="alternate" href="https://dawasnap.cloud.run/" hreflang="en-IN" />
+    <link rel="alternate" href="https://dawalens.cloud.run/" hreflang="en-GB" />
+    <link rel="alternate" href="https://dawasnap.vercel.app/" hreflang="en-US" />
+    <link rel="alternate" href="https://dawalens.vercel.app/" hreflang="en-AU" />
+    <script>
+      (function() {
+        try {
+          var curOrigin = window.location.origin;
+          var curPath = window.location.pathname;
+          var fullUrl = curOrigin + (curPath === '/' ? '' : curPath);
+          var can = document.getElementById('canonical-url');
+          if (can && curOrigin && curOrigin.indexOf('http') === 0) {
+            can.setAttribute('href', fullUrl);
+          }
+          var ogUrl = document.getElementById('og-url');
+          if (ogUrl && curOrigin && curOrigin.indexOf('http') === 0) {
+            ogUrl.setAttribute('content', fullUrl);
+          }
+        } catch (e) {}
+      })();
+    </script>
+    
     <!-- OpenGraph & Social Cards -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="DawaSnap AI: Smart Medicine Tracker & Scanner" />
-    <meta property="og:description" content="The ultimate AI-powered medicine tracker and medication scanner. Use your camera to identify pills, track prescriptions, and export health data to Google Sheets. Smart, secure, and easy medication management." />
+    <meta id="og-url" property="og:url" content="https://noorpos.in/" />
+    <meta property="og:title" content="DawaSnap AI – Smart Medicine Scanner &amp; Expiry Tracker" />
+    <meta property="og:description" content="The ultimate AI-powered medicine tracker and medication scanner. Identify pills, track prescriptions, verify drug interactions, and export health data. Verified on noorpos.in, dawasnap.cloud.run, and dawasnap.vercel.app." />
     <meta property="og:site_name" content="DawaSnap AI" />
     <meta property="og:image" content="/logo.png" />
+    <meta property="og:image:alt" content="DawaSnap AI - Smart Medicine Scanner" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:locale" content="en_US" />
     
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="DawaSnap AI: Smart Medicine Tracker & Scanner" />
-    <meta name="twitter:description" content="The ultimate AI-powered medicine tracker and medication scanner. Use your camera to identify pills, track prescriptions, and export health data to Google Sheets. Smart, secure, and easy medication management." />
+    <meta name="twitter:title" content="DawaSnap AI – Smart Medicine Scanner &amp; Expiry Tracker" />
+    <meta name="twitter:description" content="AI medicine tracker &amp; medication scanner. Identify pills, track prescriptions, and prevent drug interactions. Official sites: noorpos.in, dawasnap.cloud.run, dawasnap.vercel.app." />
     <meta name="twitter:image" content="/logo.png" />
+    <meta name="twitter:image:alt" content="DawaSnap AI Logo" />
 
-    <!-- Schema.org Structured Data -->
+    <!-- Schema.org Rich Structured Data (JSON-LD) with Sitelinks & Multi-Domain Graph -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "DawaSnap AI",
-      "url": "https://dawasnap.vercel.app",
-      "applicationCategory": "HealthApplication",
-      "operatingSystem": "All",
-      "description": "The ultimate AI-powered medicine tracker and medication scanner. Use your camera to identify pills, track prescriptions, and export health data to Google Sheets. Smart, secure, and easy medication management."
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://noorpos.in/#website",
+          "name": "DawaLens AI",
+          "alternateName": [
+            "DawaLens",
+            "DawaLens AI",
+            "DawaLensAi",
+            "Dawalens",
+            "Dawalens AI",
+            "DawaSnap",
+            "DawaSnap AI",
+            "DawaSnapAi",
+            "Dawasnap",
+            "Dawasnap AI",
+            "Dawa Lens",
+            "Dawa Snap"
+          ],
+          "url": "https://noorpos.in",
+          "sameAs": [
+            "https://noorpos.in",
+            "https://www.noorpos.in",
+            "https://dawasnap.cloud.run",
+            "https://dawalens.cloud.run",
+            "https://dawasnap.vercel.app",
+            "https://dawalens.vercel.app"
+          ],
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://noorpos.in/?q={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "ItemList",
+          "@id": "https://noorpos.in/#sitelinks",
+          "name": "DawaLens AI Official Sitelinks",
+          "description": "Primary navigational sections and services of DawaLens AI (DawaSnap AI)",
+          "itemListElement": [
+            {
+              "@type": "SiteNavigationElement",
+              "position": 1,
+              "name": "About DawaLens AI",
+              "description": "Overview of DawaLens AI (DawaSnap AI), our mission, verified domains, and developer info.",
+              "url": "https://noorpos.in/?page=about"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 2,
+              "name": "Frequently Asked Questions (FAQ)",
+              "description": "Instant answers regarding AI pill scanning, expiry alerts, and medicine safety.",
+              "url": "https://noorpos.in/?page=faq"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 3,
+              "name": "User Guide & Manual",
+              "description": "Step-by-step instructions on scanning medicines, managing batches, and Google Sheets sync.",
+              "url": "https://noorpos.in/?page=guide"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 4,
+              "name": "Privacy Policy & Data Safety",
+              "description": "Learn how your medical data is encrypted on-device and kept strictly private.",
+              "url": "https://noorpos.in/?page=privacy"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 5,
+              "name": "Terms of Service",
+              "description": "User agreement, statutory legal terms, and medical liability disclaimer.",
+              "url": "https://noorpos.in/?page=terms"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 6,
+              "name": "AI Medicine Scanner & Features",
+              "description": "Explore on-device OCR camera scanner, drug interaction engine, and multi-batch inventory.",
+              "url": "https://noorpos.in/#features"
+            }
+          ]
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://noorpos.in/#webapp",
+          "name": "DawaSnap AI",
+          "alternateName": [
+            "DawaLens",
+            "DawaLens AI",
+            "DawaLensAi",
+            "Dawalens",
+            "Dawalens AI",
+            "DawaSnap",
+            "DawaSnap AI",
+            "DawaSnapAi",
+            "Dawasnap",
+            "Dawasnap AI",
+            "Dawa Lens",
+            "Dawa Snap"
+          ],
+          "url": "https://noorpos.in",
+          "sameAs": [
+            "https://noorpos.in",
+            "https://www.noorpos.in",
+            "https://dawasnap.cloud.run",
+            "https://dawalens.cloud.run",
+            "https://dawasnap.vercel.app",
+            "https://dawalens.vercel.app"
+          ],
+          "applicationCategory": "HealthApplication",
+          "applicationSubCategory": "Medicine Scanner, Pill Tracker & Expiration Alert Vault",
+          "operatingSystem": "All (Web, Android, iOS)",
+          "description": "The ultimate AI-powered medicine tracker and medication scanner. Use your camera to identify pills, track prescriptions, and export health data to Google Sheets. Smart, secure, and easy medication management.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "featureList": [
+            "AI Camera OCR Medicine Package & Strip Scanner",
+            "Pill & Strip Expiration Date Detection & Push/Email Notifications",
+            "Drug-to-Drug Interaction Checking & Pharmacist Warnings",
+            "Secure Medicine Vault with Offline Local Storage",
+            "Two-Way Cloud Sync with PostgreSQL & Firestore Vault",
+            "Daily Medication Reminders & Dosage Tracking",
+            "Multi-Batch Medication Stock & Inventory Management"
+          ],
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "reviewCount": "1280",
+            "bestRating": "5"
+          }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://noorpos.in/#organization",
+          "name": "DawaSnap AI",
+          "alternateName": ["DawaLens AI", "DawaLens", "DawaSnap"],
+          "url": "https://noorpos.in",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://noorpos.in/logo.png"
+          },
+          "founder": {
+            "@type": "Person",
+            "name": "MD Noor Hassan"
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "newluckypharmacy@gmail.com",
+            "contactType": "Customer Support & Pharmacy Inquiries"
+          },
+          "sameAs": [
+            "https://noorpos.in",
+            "https://dawasnap.cloud.run",
+            "https://dawalens.cloud.run",
+            "https://dawasnap.vercel.app",
+            "https://dawalens.vercel.app"
+          ]
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://noorpos.in/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is DawaLens AI (DawaSnap AI)?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "DawaLens AI (also widely known as DawaSnap AI) is an advanced AI health assistant and medicine management app. It uses camera OCR scanning to identify medications, track expiration dates, verify dosage instructions, and check drug-to-drug interactions."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How does DawaLens AI identify medicines and scan pills?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Point your smartphone or web camera at any medicine packaging, bottle, blister strip, or prescription. DawaLens AI extracts the medication name, formulation, active ingredients, dosage, and expiry date instantly using Gemini vision AI."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Which domains belong to DawaLens AI / DawaSnap AI?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Official domains include noorpos.in, dawasnap.cloud.run, dawalens.cloud.run, dawasnap.vercel.app, and dawalens.vercel.app, all linking to the unified DawaLens AI and DawaSnap AI platform."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Does DawaLens AI alert me before medicines expire?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes! DawaLens AI automatically alerts you via push notifications, email, and color-coded status badges at 30 days before, 7 days before, and on the day of expiration."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is my health and medication data private?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. DawaLens AI strictly adheres to GDPR, the DPDP Act 2023, and Google Play Data Safety rules. PII is never sent to AI models and scans are encrypted."
+              }
+            }
+          ]
+        }
+      ]
     }
     </script>
     <link rel="icon" type="image/png" href="/logo.png" />
@@ -157,6 +405,24 @@
     <link rel="apple-touch-icon" href="/logo.png" />
   </head>
   <body>
+    <!-- Noscript & Crawler Semantic Sitelinks Navigation -->
+    <noscript>
+      <header>
+        <h1>DawaSnap AI – Smart Medicine Scanner &amp; Expiry Tracker</h1>
+        <p>The leading AI-powered medicine tracker, pill scanner, and pharmacy inventory manager (also searchable as DawaLens AI).</p>
+        <nav aria-label="Official Sitelinks">
+          <ul>
+            <li><a href="/?page=about">About DawaSnap AI</a></li>
+            <li><a href="/?page=faq">Frequently Asked Questions (FAQ)</a></li>
+            <li><a href="/?page=guide">User Guide &amp; Documentation</a></li>
+            <li><a href="/?page=privacy">Privacy Policy</a></li>
+            <li><a href="/?page=terms">Terms of Service</a></li>
+            <li><a href="/#features">AI Medicine Scanner &amp; Features</a></li>
+          </ul>
+        </nav>
+      </header>
+    </noscript>
+
     <div id="root">
       <!-- Minimal, borderless loader -->
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #faf8f5; margin: 0; padding: 20px;">

@@ -32,7 +32,7 @@ import { DoctorLogo } from './DoctorLogo';
 
 interface LandingPageProps {
   onSignIn: () => void;
-  navigateToPublicPage: (page: 'guide' | 'privacy' | 'terms' | 'delete-account') => void;
+  navigateToPublicPage: (page: 'guide' | 'privacy' | 'terms' | 'delete-account' | 'about' | 'faq') => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onSignIn, navigateToPublicPage }) => {
@@ -73,21 +73,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignIn, navigateToPu
           </a>
 
           {/* Zone 2: Navigation links */}
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
             <a href="#mockup" className="hover:text-slate-900 transition-colors">
               App Preview
             </a>
             <a href="#features" className="hover:text-slate-900 transition-colors">
               Capabilities
             </a>
-            <a href="#google-integration" className="hover:text-slate-900 transition-colors">
-              Google Integration
+            <a 
+              href="/?page=about" 
+              onClick={(e) => { e.preventDefault(); navigateToPublicPage('about'); }}
+              className="hover:text-[#0f9d58] transition-colors"
+            >
+              About
             </a>
-            <a href="#security" className="hover:text-slate-900 transition-colors">
-              Data Safety
-            </a>
-            <a href="#faq" className="hover:text-slate-900 transition-colors">
+            <a 
+              href="/?page=faq" 
+              onClick={(e) => { e.preventDefault(); navigateToPublicPage('faq'); }}
+              className="hover:text-[#0f9d58] transition-colors"
+            >
               FAQ
+            </a>
+            <a 
+              href="/?page=guide" 
+              onClick={(e) => { e.preventDefault(); navigateToPublicPage('guide'); }}
+              className="hover:text-[#0f9d58] transition-colors"
+            >
+              User Guide
             </a>
           </nav>
 
@@ -688,7 +700,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignIn, navigateToPu
                 </div>
                 <div>
                   <span className="font-bold text-slate-800">Android Package:</span>{' '}
-                  <code>in.dawalens.app</code>
+                  <code>in.dawasnap.app</code>
                 </div>
                 <div>
                   <span className="font-bold text-slate-800">Verified Web Domain:</span>{' '}
@@ -767,7 +779,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignIn, navigateToPu
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-slate-200">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl overflow-hidden border border-[#e3e2e0] bg-white p-0.5">
-                <img src="/logo.png" alt="" className="w-full h-full object-contain" />
+                <img src="/logo.png" alt="DawaSnap AI Logo" className="w-full h-full object-contain" />
               </div>
               <div className="space-y-0.5">
                 <div className="text-[#1f1f1f] font-extrabold text-sm">
@@ -780,34 +792,52 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignIn, navigateToPu
             </div>
 
             {/* Quick Links */}
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 font-medium">
-              <button
-                onClick={() => navigateToPublicPage('privacy')}
-                className="text-[#5f6368] hover:text-[#1f1f1f] underline cursor-pointer"
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-medium">
+              <a
+                href="/?page=about"
+                onClick={(e) => { e.preventDefault(); navigateToPublicPage('about'); }}
+                className="text-[#5f6368] hover:text-[#0f9d58] underline cursor-pointer"
               >
-                Privacy Policy
-              </button>
-              <button
-                onClick={() => navigateToPublicPage('terms')}
-                className="text-[#5f6368] hover:text-[#1f1f1f] underline cursor-pointer"
+                About Us
+              </a>
+              <a
+                href="/?page=faq"
+                onClick={(e) => { e.preventDefault(); navigateToPublicPage('faq'); }}
+                className="text-[#5f6368] hover:text-[#0f9d58] underline cursor-pointer"
               >
-                Terms of Service
-              </button>
-              <button
-                onClick={() => navigateToPublicPage('guide')}
-                className="text-[#5f6368] hover:text-[#1f1f1f] underline cursor-pointer"
+                FAQ
+              </a>
+              <a
+                href="/?page=guide"
+                onClick={(e) => { e.preventDefault(); navigateToPublicPage('guide'); }}
+                className="text-[#5f6368] hover:text-[#0f9d58] underline cursor-pointer"
               >
                 User Guide
-              </button>
-              <button
-                onClick={() => navigateToPublicPage('delete-account')}
-                className="text-[#5f6368] hover:text-[#1f1f1f] underline cursor-pointer"
+              </a>
+              <a
+                href="/?page=privacy"
+                onClick={(e) => { e.preventDefault(); navigateToPublicPage('privacy'); }}
+                className="text-[#5f6368] hover:text-[#0f9d58] underline cursor-pointer"
+              >
+                Privacy Policy
+              </a>
+              <a
+                href="/?page=terms"
+                onClick={(e) => { e.preventDefault(); navigateToPublicPage('terms'); }}
+                className="text-[#5f6368] hover:text-[#0f9d58] underline cursor-pointer"
+              >
+                Terms of Service
+              </a>
+              <a
+                href="/?page=delete-account"
+                onClick={(e) => { e.preventDefault(); navigateToPublicPage('delete-account'); }}
+                className="text-[#5f6368] hover:text-[#ea4335] underline cursor-pointer"
               >
                 Delete Account
-              </button>
+              </a>
               <a
                 href="mailto:newluckypharmacy@gmail.com"
-                className="text-[#5f6368] hover:text-[#1f1f1f] underline"
+                className="text-[#5f6368] hover:text-[#0f9d58] underline"
               >
                 Contact Developer
               </a>
@@ -816,7 +846,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignIn, navigateToPu
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
             <div>
-              &copy; {new Date().getFullYear()} DawaSnap AI. All rights reserved. Developed by MD NOOR HASSAN.
+              &copy; {new Date().getFullYear()} DawaSnap AI. All rights reserved. Developed by MD NOOR HASSAN (DawaSnap).
             </div>
             <div className="text-center sm:text-right">
               Medical Disclaimer: DawaSnap AI is an organizational and tracking tool only and does not provide clinical diagnoses.

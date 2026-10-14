@@ -48,6 +48,8 @@ interface SettingsModalProps {
   isLikedOnly?: boolean;
 
   // Help & Legal overlay callbacks
+  onOpenAbout?: () => void;
+  onOpenFaq?: () => void;
   onOpenGuide: () => void;
   onOpenPrivacy: () => void;
   onOpenTerms: () => void;
@@ -79,6 +81,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onResetToHome,
   onToggleLikedOnly,
   isLikedOnly,
+  onOpenAbout,
+  onOpenFaq,
   onOpenGuide,
   onOpenPrivacy,
   onOpenTerms,
@@ -568,6 +572,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="space-y-2.5 pt-4 border-t border-[#e3e2e0]/60">
             <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-[#0f9d58] px-1">Resources & Legal</h4>
             <div className="grid grid-cols-1 gap-2">
+              {/* About DawaSnap AI */}
+              {onOpenAbout && (
+                <button 
+                  type="button"
+                  onClick={() => { onClose(); onOpenAbout(); }}
+                  className="w-full flex items-center px-4 py-3 bg-[#eefcf5] hover:bg-[#e4faf0] border border-[#d1f2e1] rounded-2xl transition-all text-left active:scale-[0.99] group shadow-2xs cursor-pointer"
+                >
+                  <span className="text-[12px] font-bold text-[#1a3a2a] flex items-center gap-2.5">
+                    <Info size={15} className="text-[#0f9d58]" />
+                    About DawaSnap AI
+                  </span>
+                </button>
+              )}
+
+              {/* Frequently Asked Questions */}
+              {onOpenFaq && (
+                <button 
+                  type="button"
+                  onClick={() => { onClose(); onOpenFaq(); }}
+                  className="w-full flex items-center px-4 py-3 bg-[#eefcf5] hover:bg-[#e4faf0] border border-[#d1f2e1] rounded-2xl transition-all text-left active:scale-[0.99] group shadow-2xs cursor-pointer"
+                >
+                  <span className="text-[12px] font-bold text-[#1a3a2a] flex items-center gap-2.5">
+                    <HelpCircle size={15} className="text-[#0f9d58]" />
+                    Frequently Asked Questions (FAQ)
+                  </span>
+                </button>
+              )}
+
               {/* 1. User Guide & Manual */}
               <button 
                 type="button"

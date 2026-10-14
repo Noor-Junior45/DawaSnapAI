@@ -74,7 +74,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
           {/* Legal Identity Summary */}
           <div className="text-sm sm:text-base text-[#2c2824] space-y-3 leading-relaxed">
             <p>
-              This Privacy Policy and Data Safety Declaration (&ldquo;Policy&rdquo;) is a binding legal agreement between you (&ldquo;User&rdquo;, &ldquo;Data Principal&rdquo;, or &ldquo;you&rdquo;) and <strong>Noor Technologies (MD Hassan)</strong>, Operating Entity and Data Controller of <strong>DawaSnap AI</strong> (&ldquo;DawaSnap AI&rdquo;, &ldquo;Application&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;).
+              This Privacy Policy and Data Safety Declaration (&ldquo;Policy&rdquo;) is a binding legal agreement between you (&ldquo;User&rdquo;, &ldquo;Data Principal&rdquo;, or &ldquo;you&rdquo;) and <strong>DawaSnap (MD Hassan)</strong>, Operating Entity and Data Controller of <strong>DawaSnap AI</strong> (&ldquo;DawaSnap AI&rdquo;, &ldquo;Application&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;).
             </p>
             <p>
               DawaSnap AI is available as a native Android application distributed via the Google Play Store (Package: <code className="font-mono text-xs sm:text-sm bg-[#ede5d6] px-1.5 py-0.5 rounded text-[#1c1917] break-all">in.dawasnap.app</code>) and as a Progressive Web Application accessible at{' '}
@@ -715,7 +715,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
             For questions, legal notices, or assistance regarding our privacy practices and data safety compliance:
           </p>
           <div className="text-sm sm:text-base text-[#44403c] space-y-1.5 pt-1 bg-[#f5efe4] border border-[#e2d9c8] p-4 rounded-xl shadow-2xs">
-            <p><strong>Entity / Operator:</strong> Noor Technologies (MD Hassan)</p>
+            <p><strong>Entity / Operator:</strong> DawaSnap (MD Hassan)</p>
             <p><strong>Official Contact Email:</strong> newluckypharmacy@gmail.com</p>
             <p><strong>Official Web Domain:</strong> <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">https://dawasnap.vercel.app</a></p>
             <p><strong>Account Deletion Portal:</strong> <a href="https://dawasnap.vercel.app/delete-account" target="_blank" rel="noopener noreferrer" className="text-rose-600 font-bold underline break-all">https://dawasnap.vercel.app/delete-account</a></p>

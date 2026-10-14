@@ -83,7 +83,7 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
 
           <div className="text-sm sm:text-base text-[#2c2824] space-y-3 leading-relaxed">
             <p>
-              This Terms of Service and Clinical Usage Agreement (&ldquo;Terms&rdquo;, &ldquo;Agreement&rdquo;, or &ldquo;Terms of Use&rdquo;) is a binding legal contract between you (&ldquo;User&rdquo;, &ldquo;you&rdquo;, or &ldquo;your&rdquo;) and <strong>Noor Technologies (MD Hassan)</strong>, Operating Developer and Service Provider of <strong>DawaSnap AI</strong> (&ldquo;DawaSnap AI&rdquo;, &ldquo;Application&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;).
+              This Terms of Service and Clinical Usage Agreement (&ldquo;Terms&rdquo;, &ldquo;Agreement&rdquo;, or &ldquo;Terms of Use&rdquo;) is a binding legal contract between you (&ldquo;User&rdquo;, &ldquo;you&rdquo;, or &ldquo;your&rdquo;) and <strong>DawaSnap (MD Hassan)</strong>, Operating Developer and Service Provider of <strong>DawaSnap AI</strong> (&ldquo;DawaSnap AI&rdquo;, &ldquo;Application&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;).
             </p>
             <p>
               DawaSnap AI is accessible as a native Android mobile application (Package: <code className="font-mono text-xs sm:text-sm bg-[#ede5d6] px-1.5 py-0.5 rounded text-[#1c1917] break-all">in.dawasnap.app</code>) and as a web application at{' '}
@@ -317,7 +317,7 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
 
           <div className="space-y-3 text-sm sm:text-base text-[#2c2824] leading-relaxed">
             <p>
-              <strong>5.1 Intellectual Property Ownership:</strong> All code, user interfaces, branding, vector artwork, Doctor Logo, and algorithmic heuristic rules are the exclusive property of <strong>Noor Technologies (MD Hassan)</strong>.
+              <strong>5.1 Intellectual Property Ownership:</strong> All code, user interfaces, branding, vector artwork, Doctor Logo, and algorithmic heuristic rules are the exclusive property of <strong>DawaSnap (MD Hassan)</strong>.
             </p>
             <p>
               <strong>5.2 User Data Ownership &amp; Privacy:</strong> You retain complete ownership of your personal health data, medication entries, notes, and photos. We process your data strictly under the terms of our active <a href="/privacy" className="text-[#0f9d58] font-bold underline">Privacy Policy</a>.
@@ -348,7 +348,7 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
               DAWASNAP AI, ITS ENTIRE CODEBASE, ON-DEVICE OCR SCANNERS, DRUG INTERACTION CALCULATORS, SCHEDULE ALERTS, AND AI PHARMACIST OUTPUTS ARE PROVIDED STRICTLY ON AN <strong>&ldquo;AS IS&rdquo;</strong> AND <strong>&ldquo;AS AVAILABLE&rdquo;</strong> BASIS, WITHOUT WARRANTIES OR GUARANTEES OF ANY KIND, EITHER EXPRESS, STATUTORY, OR IMPLIED.
             </p>
             <p>
-              Noor Technologies (MD Hassan) AND DAWASNAP AI EXPRESSLY DISCLAIM ALL IMPLIED WARRANTIES, INCLUDING BUT NOT LIMITED TO MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, ACCURACY, FREEDOM FROM PROGRAMMING ERRORS, OR FREEDOM FROM OPERATING SYSTEM NOTIFICATION DELAYS CAUSED BY MANUFACTURER BATTERY-SAVING MODES.
+              DawaSnap (MD Hassan) AND DAWASNAP AI EXPRESSLY DISCLAIM ALL IMPLIED WARRANTIES, INCLUDING BUT NOT LIMITED TO MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, ACCURACY, FREEDOM FROM PROGRAMMING ERRORS, OR FREEDOM FROM OPERATING SYSTEM NOTIFICATION DELAYS CAUSED BY MANUFACTURER BATTERY-SAVING MODES.
             </p>
           </div>
         </section>
@@ -367,7 +367,7 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
               7.1 Exclusion of Health &amp; Consequential Damages:
             </p>
             <p className="text-[#44403c]">
-              Under no legal theory (contract, tort, negligence, or strict liability) shall Noor Technologies (MD Hassan) or DawaSnap AI be liable for any personal injury, adverse drug event, pharmaceutical allergic reaction, missed dose, accidental ingestion of expired medication, death, or indirect damages resulting from your use of or reliance upon the application.
+              Under no legal theory (contract, tort, negligence, or strict liability) shall DawaSnap (MD Hassan) or DawaSnap AI be liable for any personal injury, adverse drug event, pharmaceutical allergic reaction, missed dose, accidental ingestion of expired medication, death, or indirect damages resulting from your use of or reliance upon the application.
             </p>
             <div className="bg-[#fdf4f4] border-l-4 border-rose-600 border border-rose-200 p-4 rounded-r-xl text-xs sm:text-sm text-rose-950 font-bold">
               7.2 Strict Financial Liability Cap:
@@ -394,7 +394,7 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
                 8.1 Governing Law &amp; Exclusive Jurisdiction:
               </div>
               <p className="text-[#44403c]">
-                These Terms shall be governed by and construed in accordance with the substantive laws of the <strong>Republic of India</strong> (including the Indian Contract Act, 1872 and the DPDP Act, 2023). You and Noor Technologies (MD Hassan) irrevocably agree that any dispute or lawsuit arising hereunder shall be subject to the exclusive personal and subject-matter jurisdiction of the <strong>Competent Civil Courts in Kolkata, West Bengal, India</strong>.
+                These Terms shall be governed by and construed in accordance with the substantive laws of the <strong>Republic of India</strong> (including the Indian Contract Act, 1872 and the DPDP Act, 2023). You and DawaSnap (MD Hassan) irrevocably agree that any dispute or lawsuit arising hereunder shall be subject to the exclusive personal and subject-matter jurisdiction of the <strong>Competent Civil Courts in Kolkata, West Bengal, India</strong>.
               </p>
             </div>
 
@@ -445,7 +445,7 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
                       Service Provider
                     </th>
                     <td className="py-3 px-3.5 sm:px-4 font-bold text-[#1c1917] align-middle">
-                      Noor Technologies (MD Hassan)
+                      DawaSnap (MD Hassan)
                     </td>
                   </tr>
                   <tr className="hover:bg-[#f3ede1]/60 transition-colors">

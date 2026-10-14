@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
 
+Sitemap: https://noorpos.in/sitemap.xml
+Sitemap: https://dawasnap.cloud.run/sitemap.xml
+Sitemap: https://dawalens.cloud.run/sitemap.xml
 Sitemap: https://dawasnap.vercel.app/sitemap.xml
+Sitemap: https://dawalens.vercel.app/sitemap.xml
