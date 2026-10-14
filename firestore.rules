@@ -33,7 +33,7 @@ service cloud.firestore {
                'category', 'categories', 'tags', 'notes', 'barcode', 'mfgDate', 'manufacturer', 
                'price', 'groupKey', 'totalQuantity', 'batchId', 'batchCount', 'batches', 
                'allBatches', 'activeBatches', 'expiredOrEmptyBatches', 'earliestExpiry', 
-               'dosageUnit', 'sideEffects', 'email'
+               'dosageUnit', 'sideEffects', 'email', 'isEncrypted', 'ivMap'
              ]) &&
              data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
              data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
@@ -74,7 +74,9 @@ service cloud.firestore {
              (!('enableLowStockAlert' in data) || data.enableLowStockAlert is bool) &&
              (!('lowStockThreshold' in data) || data.lowStockThreshold == null || (data.lowStockThreshold is number && data.lowStockThreshold >= 0)) &&
              (!('enableEmailExpiryAlert' in data) || data.enableEmailExpiryAlert is bool) &&
-             (!('enableEmailLowStockAlert' in data) || data.enableEmailLowStockAlert is bool);
+             (!('enableEmailLowStockAlert' in data) || data.enableEmailLowStockAlert is bool) &&
+             (!('isEncrypted' in data) || data.isEncrypted is bool) &&
+             (!('ivMap' in data) || data.ivMap == null || data.ivMap is map);
     }
 
     function isValidMedicineHistory(data) {
@@ -161,7 +163,10 @@ service cloud.firestore {
 
       match /history/{historyId} {
         allow read, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-        allow create: if isAuthenticated() && isValidMedicineHistory(request.resource.data) && request.resource.data.medicineId == medicineId && get(/databases/$(database)/documents/medicines/$(medicineId)).data.userId == request.auth.uid;
+        allow create: if isAuthenticated() && isValidMedicineHistory(request.resource.data) && request.resource.data.medicineId == medicineId && (
+          (exists(/databases/$(database)/documents/medicines/$(medicineId)) && get(/databases/$(database)/documents/medicines/$(medicineId)).data.userId == request.auth.uid) ||
+          (existsAfter(/databases/$(database)/documents/medicines/$(medicineId)) && getAfter(/databases/$(database)/documents/medicines/$(medicineId)).data.userId == request.auth.uid)
+        );
         allow update: if false; // History is strictly immutable
       }
     }

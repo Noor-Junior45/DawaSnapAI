@@ -1027,6 +1027,27 @@ export default function App() {
       const batch = writeBatch(db);
       let targetId = '';
 
+      const ALLOWED_MEDICINE_KEYS = new Set([
+        'id', 'name', 'dosage', 'expirationDate', 'userId', 'createdAt', 'updatedAt', 
+        'usageInstructions', 'imageUrl', 'taken', 'quantity', 
+        'isDeleted', 'deletedAt', 'form', 'schedule', 'liked', 
+        'enableLowStockAlert', 'lowStockThreshold', 'enableEmailExpiryAlert', 'enableEmailLowStockAlert', 
+        'category', 'categories', 'tags', 'notes', 'barcode', 'mfgDate', 'manufacturer', 
+        'price', 'groupKey', 'totalQuantity', 'batchId', 'batchCount', 'batches', 
+        'allBatches', 'activeBatches', 'expiredOrEmptyBatches', 'earliestExpiry', 
+        'dosageUnit', 'sideEffects', 'email', 'isEncrypted', 'ivMap'
+      ]);
+
+      const sanitizeForFirestore = (obj: Record<string, any>) => {
+        const clean: Record<string, any> = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (ALLOWED_MEDICINE_KEYS.has(k) && v !== undefined) {
+            clean[k] = v;
+          }
+        }
+        return clean;
+      };
+
       if (existingMed) {
         targetId = existingMed.id;
         const medRef = doc(db, 'medicines', existingMed.id);
@@ -1034,7 +1055,9 @@ export default function App() {
         const addedQty = firestoreData.quantity || 0;
         const newQuantity = currentQty + addedQty;
 
-        const updateData: any = { 
+        const updateDataRaw: any = { 
+          id: existingMed.id,
+          name: existingMed.name,
           quantity: newQuantity,
           userId: user.uid,
           imageUrl: imageUrl || existingMed.imageUrl || null,
@@ -1042,25 +1065,26 @@ export default function App() {
         };
 
         if (existingMed.dosage === 'N/A' && firestoreData.dosage) {
-          updateData.dosage = firestoreData.dosage;
+          updateDataRaw.dosage = firestoreData.dosage;
         }
         if (!existingMed.usageInstructions && firestoreData.usageInstructions) {
-          updateData.usageInstructions = firestoreData.usageInstructions;
+          updateDataRaw.usageInstructions = firestoreData.usageInstructions;
         }
         if (firestoreData.schedule || existingMed.schedule) {
-          updateData.schedule = firestoreData.schedule || existingMed.schedule || null;
+          updateDataRaw.schedule = firestoreData.schedule || existingMed.schedule || null;
         }
         if (firestoreData.category || existingMed.category) {
-          updateData.category = firestoreData.category || existingMed.category;
+          updateDataRaw.category = firestoreData.category || existingMed.category;
         }
         if (firestoreData.categories || existingMed.categories) {
-          updateData.categories = firestoreData.categories || existingMed.categories;
+          updateDataRaw.categories = firestoreData.categories || existingMed.categories;
         }
         if (firestoreData.tags || existingMed.tags) {
           const mergedTags = Array.from(new Set([...(existingMed.tags || []), ...(firestoreData.tags || [])]));
-          if (mergedTags.length > 0) updateData.tags = mergedTags;
+          if (mergedTags.length > 0) updateDataRaw.tags = mergedTags;
         }
 
+        const updateData = sanitizeForFirestore(updateDataRaw);
         batch.set(medRef, updateData, { merge: true });
 
         const historyId = crypto.randomUUID();
@@ -1079,7 +1103,7 @@ export default function App() {
       } else if (editingMedicine && editingMedicine.id) {
         targetId = editingMedicine.id;
         const medRef = doc(db, 'medicines', editingMedicine.id);
-        const updateData: any = { 
+        const updateDataRaw: any = { 
           ...editingMedicine, 
           ...firestoreData, 
           userId: user.uid,
@@ -1087,11 +1111,7 @@ export default function App() {
           updatedAt: serverTimestamp()
         };
 
-        Object.keys(updateData).forEach(key => {
-          if (updateData[key] === undefined) {
-            updateData[key] = deleteField();
-          }
-        });
+        const updateData = sanitizeForFirestore(updateDataRaw);
         batch.set(medRef, updateData, { merge: true });
         
         const changes: string[] = [];
@@ -1138,7 +1158,7 @@ export default function App() {
       } else {
         const id = crypto.randomUUID();
         targetId = id;
-        const newMed: any = {
+        const newMedRaw: any = {
           id,
           name: firestoreData.name || 'Unknown',
           dosage: firestoreData.dosage || 'N/A',
@@ -1152,30 +1172,31 @@ export default function App() {
         };
 
         if (firestoreData.quantity !== undefined) {
-          newMed.quantity = firestoreData.quantity;
+          newMedRaw.quantity = firestoreData.quantity;
         }
         if (firestoreData.category) {
-          newMed.category = firestoreData.category;
+          newMedRaw.category = firestoreData.category;
         }
         if (firestoreData.categories && Array.isArray(firestoreData.categories)) {
-          newMed.categories = firestoreData.categories;
+          newMedRaw.categories = firestoreData.categories;
         }
         if (firestoreData.tags && Array.isArray(firestoreData.tags)) {
-          newMed.tags = firestoreData.tags;
+          newMedRaw.tags = firestoreData.tags;
         }
         if (firestoreData.enableLowStockAlert !== undefined) {
-          newMed.enableLowStockAlert = firestoreData.enableLowStockAlert;
+          newMedRaw.enableLowStockAlert = firestoreData.enableLowStockAlert;
         }
         if (firestoreData.lowStockThreshold !== undefined) {
-          newMed.lowStockThreshold = firestoreData.lowStockThreshold;
+          newMedRaw.lowStockThreshold = firestoreData.lowStockThreshold;
         }
         if (firestoreData.enableEmailExpiryAlert !== undefined) {
-          newMed.enableEmailExpiryAlert = firestoreData.enableEmailExpiryAlert;
+          newMedRaw.enableEmailExpiryAlert = firestoreData.enableEmailExpiryAlert;
         }
         if (firestoreData.enableEmailLowStockAlert !== undefined) {
-          newMed.enableEmailLowStockAlert = firestoreData.enableEmailLowStockAlert;
+          newMedRaw.enableEmailLowStockAlert = firestoreData.enableEmailLowStockAlert;
         }
 
+        const newMed = sanitizeForFirestore(newMedRaw);
         batch.set(doc(db, 'medicines', id), newMed);
 
         const historyId = crypto.randomUUID();
@@ -1211,6 +1232,7 @@ export default function App() {
     } catch (error: any) {
       console.error('Cloud Save Error:', error);
       setAlertMessage("Cloud sync failed. Please check your internet connection.");
+      handleFirestoreError(error, OperationType.WRITE, 'medicines');
     } finally {
       setIsSaving(false);
     }
