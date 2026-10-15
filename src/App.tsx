@@ -48,6 +48,7 @@ import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { initNativePerformance, setNativeBackButtonHandler } from './services/nativePerformanceService';
 import { showBannerAd, hideBannerAd, onBannerHeightChange } from './services/admobService';
+import { initNativeNotifications, scheduleNativeMedicineAlerts } from './services/nativeNotificationService';
 import { useEdgeSwipeBack, usePullToRefresh } from './utils/mobileGestures';
 import { getApiUrl } from './utils/apiConfig';
 import { 
@@ -55,7 +56,9 @@ import {
   syncSingleMedicineToSupabase, 
   syncConfigToSupabase, 
   deleteMedicinesBatchFromSupabase,
-  deleteMedicineFromSupabase 
+  deleteMedicineFromSupabase,
+  permanentlyDeleteMedicineFromSupabase,
+  permanentlyDeleteMedicinesBatchFromSupabase
 } from './services/supabaseSyncService';
 
 type PublicPageType = 'guide' | 'privacy' | 'terms' | 'delete-account' | 'recently-deleted' | 'about' | 'faq' | null;
@@ -561,6 +564,39 @@ export default function App() {
       if (cleanup) cleanup();
     };
   }, [handleGlobalBackNavigation]);
+
+  // Request native Android Push Notification & Local Alert permissions on startup
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      initNativeNotifications().catch(err => {
+        console.warn('[FCM] Native notification startup notice:', err);
+      });
+    }
+  }, []);
+
+  // Ensure FCM push token is synchronized to Firestore users/{uid}/pushTokens when user is authenticated
+  useEffect(() => {
+    if (!user || !Capacitor.isNativePlatform()) return;
+    try {
+      const cachedToken = localStorage.getItem('dawasnap_fcm_token') || localStorage.getItem('dawalens_fcm_token');
+      if (cachedToken) {
+        const tokenId = `token_${cachedToken.slice(-16).replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const tokenRef = doc(db, 'users', user.uid, 'pushTokens', tokenId);
+        setDoc(tokenRef, {
+          token: cachedToken,
+          platform: 'android',
+          appVersion: '1.2.0',
+          updatedAt: new Date().toISOString(),
+        }, { merge: true }).catch(() => {});
+      }
+    } catch {}
+  }, [user]);
+
+  // Keep native offline alarms scheduled with active inventory so phone rings at expiry even when app is closed
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || medicines.length === 0) return;
+    scheduleNativeMedicineAlerts(medicines, alertThreshold).catch(() => {});
+  }, [medicines, alertThreshold]);
 
   // Mobile Edge-Swipe navigation from left edge to navigate back
   useEdgeSwipeBack({
@@ -1761,27 +1797,95 @@ export default function App() {
 
   const handlePermanentDelete = async (id: string) => {
     if (!user) return;
+
+    // 1. Optimistic UI update so the product vanishes immediately
+    setMedicines(prev => prev.filter(m => m.id !== id));
     try {
-      const batch = writeBatch(db);
-      
-      // Delete all history documents
-      const historyRef = collection(db, 'medicines', id, 'history');
-      const historySnapshot = await getDocs(historyRef);
-      historySnapshot.forEach(doc => {
-        batch.delete(doc.ref);
+      const cached = localStorage.getItem('dawasnap_cached_medicines');
+      if (cached) {
+        const list = JSON.parse(cached);
+        localStorage.setItem('dawasnap_cached_medicines', JSON.stringify(list.filter((m: any) => m.id !== id)));
+      }
+    } catch {}
+
+    try {
+      // 2. Direct permanent delete from Cloud Firestore
+      await deleteDoc(doc(db, 'medicines', id));
+
+      // 3. Clean up history subcollection documents safely with user scoping
+      try {
+        const historyQuery = query(collection(db, 'medicines', id, 'history'), where('userId', '==', user.uid));
+        const historySnapshot = await getDocs(historyQuery);
+        if (!historySnapshot.empty) {
+          const histBatch = writeBatch(db);
+          historySnapshot.forEach(docSnap => histBatch.delete(docSnap.ref));
+          await histBatch.commit();
+        }
+      } catch (histErr) {
+        console.warn('Medicine history cleanup notice:', histErr);
+      }
+
+      // 4. Clean up local IndexedDB image storage
+      await localImageStorage.deleteImage(id).catch(() => {});
+
+      // 5. Totally delete product, history and storage files from Supabase
+      permanentlyDeleteMedicineFromSupabase(id, user).catch((err) => {
+        console.warn('Supabase permanent delete notice:', err);
       });
-      
-      // Delete the medicine document
-      batch.delete(doc(db, 'medicines', id));
-      
-      await batch.commit();
-
-      // Clean up local image storage
-      await localImageStorage.deleteImage(id);
-
-      // Clean up Supabase backup
-      deleteMedicineFromSupabase(id, user).catch(() => {});
     } catch (error) {
+      console.error('Failed to permanently delete medicine:', error);
+      handleFirestoreError(error, OperationType.DELETE, 'medicines');
+    }
+  };
+
+  const handlePermanentDeleteMultiple = async (ids: string[]) => {
+    if (!user || !Array.isArray(ids) || ids.length === 0) return;
+    const idSet = new Set(ids);
+
+    // 1. Optimistic UI update
+    setMedicines(prev => prev.filter(m => !idSet.has(m.id)));
+    try {
+      const cached = localStorage.getItem('dawasnap_cached_medicines');
+      if (cached) {
+        const list = JSON.parse(cached);
+        localStorage.setItem('dawasnap_cached_medicines', JSON.stringify(list.filter((m: any) => !idSet.has(m.id))));
+      }
+    } catch {}
+
+    try {
+      // 2. Batch delete medicine documents in Firestore (chunked)
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach(id => {
+          batch.delete(doc(db, 'medicines', id));
+        });
+        await batch.commit();
+      }
+
+      // 3. Clean up history subcollection docs safely
+      for (const id of ids) {
+        try {
+          const historyQuery = query(collection(db, 'medicines', id, 'history'), where('userId', '==', user.uid));
+          const historySnapshot = await getDocs(historyQuery);
+          if (!historySnapshot.empty) {
+            const histBatch = writeBatch(db);
+            historySnapshot.forEach(docSnap => histBatch.delete(docSnap.ref));
+            await histBatch.commit();
+          }
+        } catch {}
+      }
+
+      // 4. Clean up local image storage
+      await Promise.all(ids.map(id => localImageStorage.deleteImage(id).catch(() => {})));
+
+      // 5. Totally delete items, history and storage files from Supabase
+      permanentlyDeleteMedicinesBatchFromSupabase(ids, user).catch((err) => {
+        console.warn('Supabase batch permanent delete notice:', err);
+      });
+    } catch (error) {
+      console.error('Failed to batch delete medicines permanently:', error);
       handleFirestoreError(error, OperationType.DELETE, 'medicines');
     }
   };
@@ -2184,6 +2288,7 @@ export default function App() {
         deletedMedicines={deletedMedicines}
         onRestore={handleRestore}
         onPermanentDelete={handlePermanentDelete}
+        onPermanentDeleteMultiple={handlePermanentDeleteMultiple}
         onBack={handleBackFromPublicPage}
       />
     );

@@ -39,6 +39,8 @@ import {
   backupUserConfigToSupabase,
   deleteMedicineFromSupabase,
   deleteMedicinesBatchFromSupabase,
+  permanentlyDeleteMedicineFromSupabase,
+  permanentlyDeleteMedicinesBatchFromSupabase,
   backupMedicineHistoryToSupabase,
   deleteUserAllDataFromSupabase,
   isSupabaseConfigured,
@@ -78,7 +80,13 @@ const EXACT_ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
   "http://localhost:5173",
   "capacitor://localhost",
-  "https://localhost"
+  "https://localhost",
+  "https://noorpos.in",
+  "https://www.noorpos.in",
+  "https://dawasnap.cloud.run",
+  "https://dawalens.cloud.run",
+  "https://dawasnap.vercel.app",
+  "https://dawalens.vercel.app"
 ]);
 
 if (process.env.ALLOWED_ORIGINS) {
@@ -960,6 +968,32 @@ app.post("/api/backup/supabase/delete-medicines-batch", requireFirebaseAuth, aut
   }
 });
 
+app.post("/api/backup/supabase/permanent-delete-medicine", requireFirebaseAuth, authenticatedUidLimiter, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { medicineId } = req.body;
+    if (!medicineId) {
+      return res.status(400).json({ error: "medicineId is required." });
+    }
+    const success = await permanentlyDeleteMedicineFromSupabase(medicineId, req.userId!);
+    res.json({ success });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+app.post("/api/backup/supabase/permanent-delete-medicines-batch", requireFirebaseAuth, authenticatedUidLimiter, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { medicineIds } = req.body;
+    if (!Array.isArray(medicineIds) || medicineIds.length === 0) {
+      return res.status(400).json({ error: "medicineIds array is required." });
+    }
+    const success = await permanentlyDeleteMedicinesBatchFromSupabase(medicineIds, req.userId!);
+    res.json({ success });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
 app.post("/api/backup/supabase/sync-config", requireFirebaseAuth, authenticatedUidLimiter, async (req: AuthenticatedRequest, res) => {
   try {
     const { config } = req.body;
@@ -1131,7 +1165,13 @@ async function setupViteAndListen() {
   const http = await import("http");
   const httpServer = http.createServer(app);
 
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL && !process.env.K_SERVICE) {
+  const isProduction = process.env.NODE_ENV === "production";
+  const distPath = path.join(process.cwd(), "dist");
+  const distIndexExists = fs.existsSync(path.join(distPath, "index.html"));
+
+  // In development (including Cloud Run AI Studio dev container), or if dist/ is not built yet,
+  // mount Vite middlewares so the app compiles and serves dynamically.
+  if (!isProduction || !distIndexExists) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: {
@@ -1149,18 +1189,22 @@ async function setupViteAndListen() {
 
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const indexPath = path.join(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("Application index.html not found.");
+      }
     });
   }
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`[DAWASNAP AI SERVER] Running on port ${PORT}`);
 
-    // Treat Cloud Run as serverless: isServerless is true when process.env.K_SERVICE is set (in addition to VERCEL / AWS_LAMBDA_FUNCTION_NAME)
-    const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.K_SERVICE);
+    // Serverless mode when deployed to production Vercel or production Cloud Run
+    const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || (process.env.K_SERVICE && process.env.NODE_ENV === "production"));
     if (!isServerless) {
       startExpiryCron();
       console.log(`[SCHEDULER] Expiry cron worker started in process on persistent server.`);

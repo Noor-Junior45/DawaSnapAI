@@ -235,6 +235,76 @@ export async function deleteMedicinesBatchFromSupabase(medicineIds: string[], us
 }
 
 /**
+ * Permanently deletes a single medicine and its history/storage files from Supabase.
+ */
+export async function permanentlyDeleteMedicineFromSupabase(medicineId: string, user: User): Promise<boolean> {
+  if (!user || !medicineId) return false;
+
+  try {
+    const authHeader = await getAuthHeader();
+    const payload = JSON.stringify({ medicineId, userId: user.uid });
+    const headers = {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    };
+
+    let response = await fetch(getApiUrl('/api/backup/supabase/permanent-delete-medicine'), {
+      method: 'POST',
+      headers,
+      body: payload,
+    });
+
+    if (!response.ok && response.status === 404) {
+      response = await fetch(getDirectBackendUrl('/api/backup/supabase/permanent-delete-medicine'), {
+        method: 'POST',
+        headers,
+        body: payload,
+      });
+    }
+
+    return response.ok;
+  } catch (err) {
+    console.warn(`[SUPABASE SYNC] Failed to permanently delete medicine ${medicineId} in Supabase:`, err);
+    return false;
+  }
+}
+
+/**
+ * Permanently deletes multiple medicines and their history/storage files from Supabase.
+ */
+export async function permanentlyDeleteMedicinesBatchFromSupabase(medicineIds: string[], user: User): Promise<boolean> {
+  if (!user || !Array.isArray(medicineIds) || medicineIds.length === 0) return false;
+
+  try {
+    const authHeader = await getAuthHeader();
+    const payload = JSON.stringify({ medicineIds, userId: user.uid });
+    const headers = {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    };
+
+    let response = await fetch(getApiUrl('/api/backup/supabase/permanent-delete-medicines-batch'), {
+      method: 'POST',
+      headers,
+      body: payload,
+    });
+
+    if (!response.ok && response.status === 404) {
+      response = await fetch(getDirectBackendUrl('/api/backup/supabase/permanent-delete-medicines-batch'), {
+        method: 'POST',
+        headers,
+        body: payload,
+      });
+    }
+
+    return response.ok;
+  } catch (err) {
+    console.warn('[SUPABASE SYNC] Failed to permanently delete medicines batch in Supabase:', err);
+    return false;
+  }
+}
+
+/**
  * Backs up an audit history entry to Supabase.
  */
 export async function syncHistoryToSupabase(history: any, user: User): Promise<boolean> {

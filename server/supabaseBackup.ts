@@ -395,6 +395,115 @@ export async function deleteMedicinesBatchFromSupabase(medicineIds: string[], us
 }
 
 /**
+ * Permanently deletes a single medicine, its history, and associated storage files from Supabase.
+ */
+export async function permanentlyDeleteMedicineFromSupabase(medicineId: string, userId?: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || !medicineId) return false;
+
+  try {
+    // 1. Delete associated audit history
+    try {
+      let histQuery = client.from('medicine_history').delete().eq('medicine_id', medicineId);
+      if (userId) histQuery = histQuery.eq('user_id', userId);
+      await histQuery;
+    } catch (histErr) {
+      console.warn(`[SUPABASE BACKUP] Notice deleting medicine_history for ${medicineId}:`, histErr);
+    }
+
+    // 2. Permanently delete the medicine record
+    let query = client.from('medicines').delete().eq('id', medicineId);
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    const { error } = await query;
+    if (error) {
+      console.warn(`[SUPABASE BACKUP] Error permanently deleting medicine ${medicineId}:`, error.message);
+      return false;
+    }
+
+    // 3. Purge associated Supabase storage images/files if buckets exist
+    try {
+      const buckets = ['medicines', 'medicine-photos', 'medicine_images'];
+      const filesToRemove = [
+        medicineId,
+        `${medicineId}.jpg`,
+        `${medicineId}.png`,
+        `${medicineId}.webp`,
+        ...(userId ? [
+          `${userId}/${medicineId}`,
+          `${userId}/${medicineId}.jpg`,
+          `${userId}/${medicineId}.png`,
+          `${userId}/${medicineId}.webp`,
+        ] : []),
+      ];
+      for (const bucket of buckets) {
+        try {
+          await client.storage.from(bucket).remove(filesToRemove);
+        } catch {}
+      }
+    } catch {}
+
+    return true;
+  } catch (err) {
+    console.warn(`[SUPABASE BACKUP] Exception permanently deleting medicine:`, err);
+    return false;
+  }
+}
+
+/**
+ * Permanently deletes multiple medicines, their history, and storage files from Supabase.
+ */
+export async function permanentlyDeleteMedicinesBatchFromSupabase(medicineIds: string[], userId?: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(medicineIds) || medicineIds.length === 0) return false;
+
+  try {
+    // 1. Delete history records
+    try {
+      let histQuery = client.from('medicine_history').delete().in('medicine_id', medicineIds);
+      if (userId) histQuery = histQuery.eq('user_id', userId);
+      await histQuery;
+    } catch (histErr) {
+      console.warn(`[SUPABASE BACKUP] Notice batch deleting medicine_history:`, histErr);
+    }
+
+    // 2. Permanently delete medicine records
+    let query = client.from('medicines').delete().in('id', medicineIds);
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    const { error } = await query;
+    if (error) {
+      console.warn(`[SUPABASE BACKUP] Error batch permanently deleting medicines:`, error.message);
+      return false;
+    }
+
+    // 3. Clean up storage files in Supabase buckets
+    try {
+      const buckets = ['medicines', 'medicine-photos', 'medicine_images'];
+      const filesToRemove: string[] = [];
+      medicineIds.forEach(id => {
+        filesToRemove.push(id, `${id}.jpg`, `${id}.png`, `${id}.webp`);
+        if (userId) {
+          filesToRemove.push(`${userId}/${id}`, `${userId}/${id}.jpg`, `${userId}/${id}.png`, `${userId}/${id}.webp`);
+        }
+      });
+      for (const bucket of buckets) {
+        try {
+          await client.storage.from(bucket).remove(filesToRemove);
+        } catch {}
+      }
+    } catch {}
+
+    return true;
+  } catch (err) {
+    console.warn(`[SUPABASE BACKUP] Exception batch permanently deleting medicines:`, err);
+    return false;
+  }
+}
+
+/**
  * Backs up a medicine audit history event to Supabase.
  */
 export async function backupMedicineHistoryToSupabase(history: any): Promise<boolean> {

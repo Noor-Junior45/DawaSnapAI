@@ -383,7 +383,6 @@ export const AccountDeletionPage: React.FC<AccountDeletionPageProps> = ({
           <div><strong>Operator:</strong> DawaSnap (MD Hassan)</div>
           <div><strong>Grievance Officer:</strong> MD Hassan</div>
           <div><strong>Contact Email:</strong> {supportEmail}</div>
-          <div><strong>Physical Address:</strong> India</div>
           <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-200">
             You may also revoke Google Account OAuth access directly via Google Account Security: <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] underline">https://myaccount.google.com/permissions</a>
           </div>

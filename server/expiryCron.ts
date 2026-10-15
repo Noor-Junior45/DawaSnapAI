@@ -244,6 +244,16 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
                     stage: stageToSend,
                     expirationDate: m.expirationDate,
                   },
+                  android: {
+                    priority: 'high',
+                    notification: {
+                      channelId: 'medicine_alerts',
+                      sound: 'default',
+                      defaultVibrateTimings: true,
+                      priority: 'high',
+                      visibility: 'public',
+                    },
+                  },
                 });
                 console.log(`[BACKGROUND EXPIRY CRON] Dispatched FCM push notification to ${tokens.length} device(s) for ${schedule.email}`);
 

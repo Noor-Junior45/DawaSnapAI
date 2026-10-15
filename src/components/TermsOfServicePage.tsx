@@ -72,12 +72,12 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
                 Terms of Service &amp; Clinical Usage Agreement
               </h2>
               <p className="text-xs sm:text-sm font-semibold text-[#78716c] uppercase tracking-wider mt-1.5">
-                Ref: DAWASNAP-TOS-2026-V3.0 &bull; Governing Law: Republic of India &bull; App Version: 1.1.6
+                Ref: DAWASNAP-TOS-2026-V3.1 &bull; Governing Law: Republic of India &bull; App Version: 1.2.0 (Build 9)
               </p>
             </div>
             <div className="text-xs sm:text-sm text-[#78716c] font-medium sm:text-right shrink-0">
-              <div>Effective Date: October 11, 2026</div>
-              <div>Last Revised: October 11, 2026</div>
+              <div>Effective Date: October 15, 2026</div>
+              <div>Last Revised: October 15, 2026</div>
             </div>
           </div>
 
@@ -86,14 +86,13 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
               This Terms of Service and Clinical Usage Agreement (&ldquo;Terms&rdquo;, &ldquo;Agreement&rdquo;, or &ldquo;Terms of Use&rdquo;) is a binding legal contract between you (&ldquo;User&rdquo;, &ldquo;you&rdquo;, or &ldquo;your&rdquo;) and <strong>DawaSnap (MD Hassan)</strong>, Operating Developer and Service Provider of <strong>DawaSnap AI</strong> (&ldquo;DawaSnap AI&rdquo;, &ldquo;Application&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;).
             </p>
             <p>
-              DawaSnap AI is accessible as a native Android mobile application (Package: <code className="font-mono text-xs sm:text-sm bg-[#ede5d6] px-1.5 py-0.5 rounded text-[#1c1917] break-all">in.dawasnap.app</code>) and as a web application at{' '}
-              <a href="https://noorpos.in" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">
-                https://noorpos.in
-              </a>{', '}
-              <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">
-                https://dawasnap.vercel.app
-              </a>{', with backend microservices hosted on Google Cloud Run (region asia-south1).'}
+              DawaSnap AI is accessible as a native Android mobile application (Package: <code className="font-mono text-xs sm:text-sm bg-[#ede5d6] px-1.5 py-0.5 rounded text-[#1c1917] break-all">in.dawasnap.app</code>) and as a web application across our official domains:
             </p>
+            <div className="bg-[#f5efe4] border border-[#e2d9c8] rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-[#2c2824] space-y-1.5 shadow-2xs">
+              <div><strong>Primary Domain:</strong> <a href="https://noorpos.in" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://noorpos.in</a></div>
+              <div><strong>Cloud Run Microservices (asia-south1):</strong> <a href="https://dawasnap.cloud.run/" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawasnap.cloud.run/</a> &bull; <a href="https://dawalens.cloud.run/" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawalens.cloud.run/</a></div>
+              <div><strong>Vercel Global Deployments:</strong> <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawasnap.vercel.app</a> &bull; <a href="https://dawalens.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawalens.vercel.app</a></div>
+            </div>
             <p className="font-semibold text-[#1c1917]">
               BY ACCESSING, INSTALLING, REGISTERING, OR USING DAWASNAP AI, YOU EXPLICITLY ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND AGREED TO BE BOUND BY ALL PROVISIONS OF THESE TERMS, INCLUDING THE MANDATORY CLINICAL DISCLAIMERS, ARBITRATION PROCEDURES, AND CLASS ACTION WAIVER.
             </p>
@@ -466,12 +465,15 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
                       </span>
                     </td>
                   </tr>
+
                   <tr className="hover:bg-[#f3ede1]/60 transition-colors">
                     <th scope="row" className="py-3 px-3.5 sm:px-4 font-semibold text-[#57534e] w-[32%] sm:w-48 shrink-0 align-middle bg-[#f6f0e4]">
-                      Postal Address
+                      Official Domains
                     </th>
-                    <td className="py-3 px-3.5 sm:px-4 text-[#2c2824] font-medium align-middle">
-                      India
+                    <td className="py-3 px-3.5 sm:px-4 text-[#2c2824] align-middle text-xs sm:text-sm space-y-1">
+                      <div><strong>Custom:</strong> <a href="https://noorpos.in" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://noorpos.in</a></div>
+                      <div><strong>Cloud Run:</strong> <a href="https://dawasnap.cloud.run/" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawasnap.cloud.run/</a> &bull; <a href="https://dawalens.cloud.run/" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawalens.cloud.run/</a></div>
+                      <div><strong>Vercel:</strong> <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawasnap.vercel.app</a> &bull; <a href="https://dawalens.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawalens.vercel.app</a></div>
                     </td>
                   </tr>
                   <tr className="hover:bg-[#f3ede1]/60 transition-colors">
@@ -507,15 +509,19 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onBack }
       {/* Footer */}
       <footer className="border-t border-[#e5decb] bg-[#faf6ee] py-6 px-4 sm:px-8 mt-12 text-xs text-[#78716c]">
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div>&copy; 2026 DawaSnap AI &bull; Ref: DAWASNAP-TOS-2026-V2.5</div>
-          <div className="flex items-center gap-4">
-            <a href="/" className="hover:text-[#0f9d58] font-semibold transition-colors">Home</a>
+          <div>&copy; 2026 DawaSnap AI &bull; Ref: DAWASNAP-TOS-2026-V3.0</div>
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap justify-center font-medium">
+            <a href="/" className="hover:text-[#0f9d58] transition-colors">Home</a>
             <span>•</span>
-            <a href="/guide" className="hover:text-[#0f9d58] font-semibold transition-colors">User Guide</a>
+            <a href="/guide" className="hover:text-[#0f9d58] transition-colors">User Guide</a>
             <span>•</span>
-            <a href="/privacy" className="hover:text-[#0f9d58] font-semibold transition-colors">Privacy Policy</a>
+            <a href="/about" className="hover:text-[#0f9d58] transition-colors">About</a>
             <span>•</span>
-            <a href="/delete-account" className="hover:text-rose-600 font-semibold transition-colors">Delete Account</a>
+            <a href="/faq" className="hover:text-[#0f9d58] transition-colors">FAQ</a>
+            <span>•</span>
+            <a href="/privacy" className="hover:text-[#0f9d58] transition-colors">Privacy Policy</a>
+            <span>•</span>
+            <a href="/delete-account" className="hover:text-rose-600 transition-colors">Delete Account</a>
           </div>
         </div>
       </footer>

@@ -62,12 +62,12 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
                 Privacy Policy &amp; Data Safety Declaration
               </h2>
               <p className="text-xs sm:text-sm font-semibold text-[#78716c] uppercase tracking-wider mt-1.5">
-                Ref: DAWASNAP-PRIVACY-2026-V3.0 &bull; Legal Jurisdiction: India &amp; Global (GDPR) &bull; App Version: 1.1.6
+                Ref: DAWASNAP-PRIVACY-2026-V3.1 &bull; Legal Jurisdiction: India &amp; Global (GDPR) &bull; App Version: 1.2.0 (Build 9)
               </p>
             </div>
             <div className="text-xs sm:text-sm text-[#78716c] font-medium sm:text-right shrink-0">
-              <div>Effective Date: October 11, 2026</div>
-              <div>Last Revised: October 11, 2026</div>
+              <div>Effective Date: October 15, 2026</div>
+              <div>Last Revised: October 15, 2026</div>
             </div>
           </div>
 
@@ -77,14 +77,13 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
               This Privacy Policy and Data Safety Declaration (&ldquo;Policy&rdquo;) is a binding legal agreement between you (&ldquo;User&rdquo;, &ldquo;Data Principal&rdquo;, or &ldquo;you&rdquo;) and <strong>DawaSnap (MD Hassan)</strong>, Operating Entity and Data Controller of <strong>DawaSnap AI</strong> (&ldquo;DawaSnap AI&rdquo;, &ldquo;Application&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;).
             </p>
             <p>
-              DawaSnap AI is available as a native Android application distributed via the Google Play Store (Package: <code className="font-mono text-xs sm:text-sm bg-[#ede5d6] px-1.5 py-0.5 rounded text-[#1c1917] break-all">in.dawasnap.app</code>) and as a Progressive Web Application accessible at{' '}
-              <a href="https://noorpos.in" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">
-                https://noorpos.in
-              </a>{', '}
-              <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">
-                https://dawasnap.vercel.app
-              </a>{', with secure API microservices running on Google Cloud Run (region asia-south1).'}
+              DawaSnap AI is available as a native Android application distributed via the Google Play Store (Package: <code className="font-mono text-xs sm:text-sm bg-[#ede5d6] px-1.5 py-0.5 rounded text-[#1c1917] break-all">in.dawasnap.app</code>) and as a Progressive Web Application accessible across our verified network of domains:
             </p>
+            <div className="bg-[#f5efe4] border border-[#e2d9c8] rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-[#2c2824] space-y-1.5 shadow-2xs">
+              <div><strong>Primary Domain:</strong> <a href="https://noorpos.in" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://noorpos.in</a></div>
+              <div><strong>Cloud Run Microservices (region asia-south1):</strong> <a href="https://dawasnap.cloud.run/" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawasnap.cloud.run/</a> &bull; <a href="https://dawalens.cloud.run/" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawalens.cloud.run/</a></div>
+              <div><strong>Vercel Global Deployments:</strong> <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawasnap.vercel.app</a> &bull; <a href="https://dawalens.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawalens.vercel.app</a></div>
+            </div>
             <p>
               This Policy details our comprehensive compliance framework under the <strong>Google Play Store Health &amp; Medical Apps Policy</strong>, the <strong>Google API Services User Data Policy</strong> (including Limited Use requirements), the <strong>India Digital Personal Data Protection (DPDP) Act, 2023</strong>, and the <strong>General Data Protection Regulation (GDPR - EU/EEA 2016/679)</strong>.
             </p>
@@ -611,14 +610,6 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
                     </td>
                   </tr>
 
-                  <tr className="hover:bg-[#f3ede1]/60 transition-colors">
-                    <th scope="row" className="py-3 px-3.5 sm:px-4 font-semibold text-[#57534e] w-[32%] sm:w-48 shrink-0 align-middle bg-[#f6f0e4]">
-                      Postal Address
-                    </th>
-                    <td className="py-3 px-3.5 sm:px-4 text-[#2c2824] font-medium align-middle">
-                      India
-                    </td>
-                  </tr>
 
                   <tr className="hover:bg-[#f3ede1]/60 transition-colors">
                     <th scope="row" className="py-3 px-3.5 sm:px-4 font-semibold text-[#57534e] w-[32%] sm:w-48 shrink-0 align-middle bg-[#f6f0e4]">
@@ -714,11 +705,18 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
           <p className="text-sm sm:text-base text-[#2c2824] leading-relaxed">
             For questions, legal notices, or assistance regarding our privacy practices and data safety compliance:
           </p>
-          <div className="text-sm sm:text-base text-[#44403c] space-y-1.5 pt-1 bg-[#f5efe4] border border-[#e2d9c8] p-4 rounded-xl shadow-2xs">
-            <p><strong>Entity / Operator:</strong> DawaSnap (MD Hassan)</p>
-            <p><strong>Official Contact Email:</strong> newluckypharmacy@gmail.com</p>
-            <p><strong>Official Web Domain:</strong> <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline break-all">https://dawasnap.vercel.app</a></p>
-            <p><strong>Account Deletion Portal:</strong> <a href="https://dawasnap.vercel.app/delete-account" target="_blank" rel="noopener noreferrer" className="text-rose-600 font-bold underline break-all">https://dawasnap.vercel.app/delete-account</a></p>
+          <div className="text-sm sm:text-base text-[#44403c] space-y-2 pt-1 bg-[#f5efe4] border border-[#e2d9c8] p-4 rounded-xl shadow-2xs">
+            <p><strong>Entity / Operator:</strong> DawaSnap (Developer: MD Hassan)</p>
+            <p><strong>Official Contact Email:</strong> <a href="mailto:newluckypharmacy@gmail.com" className="text-[#0f9d58] font-bold underline">newluckypharmacy@gmail.com</a></p>
+            <div>
+              <strong>Official Web Network &amp; Domains:</strong>
+              <div className="mt-1 pl-3 space-y-1 text-xs sm:text-sm">
+                <div>&bull; <strong>Custom Domain:</strong> <a href="https://noorpos.in" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://noorpos.in</a></div>
+                <div>&bull; <strong>Cloud Run (asia-south1):</strong> <a href="https://dawasnap.cloud.run/" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawasnap.cloud.run/</a> &bull; <a href="https://dawalens.cloud.run/" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawalens.cloud.run/</a></div>
+                <div>&bull; <strong>Vercel Global:</strong> <a href="https://dawasnap.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawasnap.vercel.app</a> &bull; <a href="https://dawalens.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] font-bold underline">https://dawalens.vercel.app</a></div>
+              </div>
+            </div>
+            <p className="pt-1"><strong>Account Deletion Portal:</strong> <a href="/delete-account" className="text-rose-600 font-bold underline">https://dawasnap.vercel.app/delete-account</a></p>
           </div>
         </section>
       </main>
@@ -727,7 +725,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
       <footer className="border-t border-[#e2d9c8] bg-[#f4eee1] py-5 px-4 sm:px-8 text-xs sm:text-sm text-[#78716c]">
         <div className="max-w-4xl mx-auto flex flex-col items-center justify-center gap-3 text-center">
           {/* Above: all buttons in one line */}
-          <div className="flex items-center justify-center gap-2.5 sm:gap-5 flex-wrap font-medium text-[#57534e]">
+          <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap font-medium text-[#57534e]">
             <a 
               href="/" 
               onClick={() => triggerLightHaptic()} 
@@ -742,6 +740,22 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
               className="hover:text-[#0f9d58] transition-colors"
             >
               User Guide
+            </a>
+            <span className="text-[#a8a29e]">&bull;</span>
+            <a 
+              href="/about" 
+              onClick={() => triggerLightHaptic()} 
+              className="hover:text-[#0f9d58] transition-colors"
+            >
+              About
+            </a>
+            <span className="text-[#a8a29e]">&bull;</span>
+            <a 
+              href="/faq" 
+              onClick={() => triggerLightHaptic()} 
+              className="hover:text-[#0f9d58] transition-colors"
+            >
+              FAQ
             </a>
             <span className="text-[#a8a29e]">&bull;</span>
             <a 
@@ -768,14 +782,23 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
           <div className="flex items-center justify-center gap-2 flex-wrap text-center">
             <span>&copy; 2026 DawaSnap AI</span>
             <span className="text-[#a8a29e]">&bull;</span>
-            <span>Registered Domain:</span>
+            <span>Primary Domains:</span>
+            <a 
+              href="https://noorpos.in" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="hover:text-[#0f9d58] underline font-medium"
+            >
+              noorpos.in
+            </a>
+            <span className="text-[#a8a29e]">&bull;</span>
             <a 
               href="https://dawasnap.vercel.app" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="hover:text-[#0f9d58] underline font-medium"
             >
-              https://dawasnap.vercel.app
+              dawasnap.vercel.app
             </a>
           </div>
         </div>

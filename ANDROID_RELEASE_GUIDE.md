@@ -7,6 +7,11 @@ This project is now fully configured as a native Android app powered by **Capaci
 ## 1. Application Identifiers & Configuration
 - **Package Name (App ID)**: `in.dawasnap.app`
 - **Application Name**: `DawaSnap AI: Medicine Tracker`
+- **Version**: `1.2.0` (Android `versionCode 9`)
+- **APK Official Network Domains**:
+  - **Primary Google Cloud Domain**: `https://dawasnap.cloud.run` (All native APK API calls, Gemini AI processing, drug interaction screeners, and sync)
+  - **Failover / Custom Domain**: `https://noorpos.in` (Automatic fallback for all endpoints)
+  - **Mirror Cloud Run**: `https://dawalens.cloud.run`
 - **Firebase Project ID**: `gen-lang-client-0044881146`
 - **Google Services Config**:
   - `android/app/google-services.json` (Active)

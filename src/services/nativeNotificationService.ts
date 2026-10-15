@@ -148,7 +148,7 @@ export async function initNativeNotifications(): Promise<boolean> {
                   await setDoc(tokenRef, {
                     token: token.value,
                     platform: 'android',
-                    appVersion: '1.1.6',
+                    appVersion: '1.2.0',
                     updatedAt: new Date().toISOString(),
                   }, { merge: true });
                   console.log('[FCM] Successfully persisted Android push token to users/{uid}/pushTokens');

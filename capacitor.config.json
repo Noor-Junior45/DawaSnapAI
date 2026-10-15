@@ -3,7 +3,17 @@
   "appName": "DawaSnap AI: Medicine Tracker",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": false,
+    "allowNavigation": [
+      "dawasnap.cloud.run",
+      "dawalens.cloud.run",
+      "*.cloud.run",
+      "noorpos.in",
+      "*.noorpos.in",
+      "dawasnap.vercel.app",
+      "dawalens.vercel.app"
+    ]
   },
   "plugins": {
     "LocalNotifications": {

@@ -660,7 +660,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Sign Out
             </button>
             <p className="text-[11px] font-medium text-slate-400 mt-1 select-none">
-              DawaSnap AI &bull; Version 1.1.6 (Build 8)
+              DawaSnap AI &bull; Version 1.2.0 (Build 9)
             </p>
           </div>
 
