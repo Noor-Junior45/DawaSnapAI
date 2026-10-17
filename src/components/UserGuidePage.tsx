@@ -349,7 +349,7 @@ export const UserGuidePage: React.FC<UserGuidePageProps> = ({ onBack }) => {
                 <strong>Native Hinglish Support:</strong> Dr. DawaSnap natively speaks and understands Hinglish (e.g. <em>"Aapko ye Paracetamol din mein do baar khana khane ke baad leni hai"</em>).
               </li>
               <li>
-                <strong>Consultation Reports:</strong> Tap <strong>Send Consultation Report</strong> to dispatch a structured summary of your consultation and active medicine list directly to your verified email and in-app Treatment Mailbox.
+                <strong>Consultation Reports:</strong> Tap <strong>Send Consultation Report</strong> to dispatch a structured summary of your consultation and active medicine list directly to your verified email and in-app Mailbox.
               </li>
             </ul>
           </div>

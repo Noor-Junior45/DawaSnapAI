@@ -11,7 +11,7 @@ service cloud.firestore {
 
     function isValidUserConfig(data) {
       return data.keys().hasAll(['userId']) &&
-             data.keys().hasOnly(['userId', 'email', 'emailNotificationsEnabled', 'browserNotificationsEnabled', 'alertThreshold', 'accentColor', 'sortOrder', 'lowQuantityThreshold', 'theme']) &&
+             data.keys().hasOnly(['userId', 'email', 'emailNotificationsEnabled', 'browserNotificationsEnabled', 'alertThreshold', 'accentColor', 'sortOrder', 'lowQuantityThreshold', 'theme', 'customCardOrder']) &&
              data.userId == request.auth.uid &&
              (!('email' in data) || data.email == null || (data.email == request.auth.token.email && isValidEmail(data.email))) &&
              (!('emailNotificationsEnabled' in data) || data.emailNotificationsEnabled is bool) &&
@@ -20,7 +20,8 @@ service cloud.firestore {
              (!('accentColor' in data) || (data.accentColor is string && data.accentColor.matches('^#[0-9a-fA-F]{6}$'))) &&
              (!('sortOrder' in data) || (data.sortOrder in ['default', 'asc', 'desc'])) &&
              (!('lowQuantityThreshold' in data) || (data.lowQuantityThreshold is number && data.lowQuantityThreshold >= 0)) &&
-             (!('theme' in data) || (data.theme in ['system', 'light', 'dark']));
+             (!('theme' in data) || (data.theme in ['system', 'light', 'dark'])) &&
+             (!('customCardOrder' in data) || (data.customCardOrder is list && data.customCardOrder.size() <= 1000));
     }
 
     function isValidMedicine(data) {
@@ -149,9 +150,9 @@ service cloud.firestore {
 
     // Mail collection for email notifications
     match /mail/{mailId} {
-      allow read: if isAuthenticated() && resource.data.to == request.auth.token.email;
+      allow read, delete: if isAuthenticated() && resource.data.to == request.auth.token.email;
       allow create: if isAuthenticated() && request.auth.token.email_verified == true && isValidMail(request.resource.data);
-      allow update, delete: if false;
+      allow update: if false;
     }
 
     // Medicines collection

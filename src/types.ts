@@ -61,6 +61,7 @@ export interface Medicine {
   lowStockThreshold?: number; // custom threshold per medicine if specified
   enableEmailExpiryAlert?: boolean; // toggle email alert when expiring
   enableEmailLowStockAlert?: boolean; // toggle email alert on low stock
+  customOrder?: number; // Custom drag & drop positioning order (1, 2, 3, 4...)
 }
 
 export interface ChatMessage {

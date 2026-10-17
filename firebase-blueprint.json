@@ -79,7 +79,8 @@
         "accentColor": { "type": "string" },
         "sortOrder": { "type": "string", "enum": ["default", "asc", "desc"] },
         "lowQuantityThreshold": { "type": "number" },
-        "theme": { "type": "string", "enum": ["system", "light", "dark"] }
+        "theme": { "type": "string", "enum": ["system", "light", "dark"] },
+        "customCardOrder": { "type": "array", "description": "User custom ordered sequence of medicine group keys", "items": { "type": "string" } }
       },
       "required": ["userId"],
       "additionalProperties": false

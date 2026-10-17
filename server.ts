@@ -56,7 +56,10 @@ const app = express();
 // Trust first proxy hop (e.g. Cloud Run, Cloudflare) - Never read X-Forwarded-For manually
 app.set('trust proxy', 1);
 
-const PORT = Number(process.env.PORT) || 3000;
+// In development, the dev server must strictly run on port 3000 (AI Studio constraint).
+// In production container runtime (e.g. Cloud Run), use process.env.PORT.
+const isProduction = process.env.NODE_ENV === "production";
+const PORT = isProduction ? (Number(process.env.PORT) || 3000) : 3000;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "";
 
 // Health check endpoint for Cloud Run container lifecycle and load balancers
@@ -600,6 +603,35 @@ app.post("/api/send-email", requireFirebaseAuth, sensitiveAuthActionLimiter, asy
   } catch (error: any) {
     console.error("[EMAIL SEND ERROR]", error);
     res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
+// Clear User Mailbox Outbox Route
+app.post("/api/clear-mailbox", requireFirebaseAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userEmail = req.userEmail;
+    if (!userEmail) {
+      return res.status(401).json({ error: "Authenticated user email is required." });
+    }
+
+    if (hasServiceAccountConfigured()) {
+      const db = getAdminDb();
+      const cleanEmail = userEmail.trim().toLowerCase();
+      const emailsToCheck = Array.from(new Set([userEmail, cleanEmail, userEmail.trim()]));
+      for (const e of emailsToCheck) {
+        const snap = await db.collection("mail").where("to", "==", e).get();
+        if (!snap.empty) {
+          const batch = db.batch();
+          snap.docs.forEach((doc) => batch.delete(doc.ref));
+          await batch.commit();
+        }
+      }
+    }
+
+    res.json({ success: true, message: "Outbox history cleared." });
+  } catch (err: any) {
+    console.error("[CLEAR MAILBOX ERROR]", err);
+    res.status(500).json({ success: false, error: err.message || String(err) });
   }
 });
 
@@ -1177,6 +1209,7 @@ async function setupViteAndListen() {
       server: {
         middlewareMode: true,
         hmr: false,
+        ws: false,
       },
       appType: "spa",
     });
@@ -1199,6 +1232,10 @@ async function setupViteAndListen() {
       }
     });
   }
+
+  httpServer.on("error", (err: any) => {
+    console.error("[SERVER ERROR]", err);
+  });
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`[DAWASNAP AI SERVER] Running on port ${PORT}`);

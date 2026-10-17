@@ -1,6 +1,17 @@
 import { Resend } from "resend";
+import { getAdminDb, hasServiceAccountConfigured } from "./firebaseAdmin.ts";
 
 export type ExpiryStage = '30_DAYS' | '7_DAYS' | 'EXPIRED';
+
+export function getExpiryEmailSubject(medicineName: string, stage: ExpiryStage = '30_DAYS'): string {
+  if (stage === 'EXPIRED') {
+    return `Notice: ${medicineName} has Expired - Disposal Advisory`;
+  }
+  if (stage === '7_DAYS') {
+    return `Reminder: ${medicineName} Expires in 7 Days - Refill Required`;
+  }
+  return `Notice: ${medicineName} Expires in 30 Days`;
+}
 
 export function getExpiryEmailHTMLServer(
   medicineName: string, 
@@ -11,210 +22,213 @@ export function getExpiryEmailHTMLServer(
   const isExpired = stage === 'EXPIRED';
   const is7Days = stage === '7_DAYS';
 
-  const titleColor = isExpired ? '#dc2626' : (is7Days ? '#ea580c' : '#d97706');
-  const badgeText = isExpired ? 'EXPIRED MEDICINE WARNING' : (is7Days ? '7 DAYS UNTIL EXPIRY' : '1 MONTH EXPIRY NOTICE');
-  const badgeBg = isExpired ? '#fef2f2' : (is7Days ? '#fff7ed' : '#fffbeb');
-  const badgeBorder = isExpired ? '#fca5a5' : (is7Days ? '#fdba74' : '#fde68a');
-  const badgeTextColor = isExpired ? '#b91c1c' : (is7Days ? '#c2410c' : '#b45309');
+  const badgeText = isExpired ? 'EXPIRED' : (is7Days ? 'EXPIRING IN 7 DAYS' : 'EXPIRING IN 30 DAYS');
+  const actionText = isExpired ? 'Disposal Required' : (is7Days ? 'Refill Required' : 'Review Stock');
+  const statusColor = isExpired ? '#b91c1c' : (is7Days ? '#c2410c' : '#b45309');
+  const statusBg = isExpired ? '#fef2f2' : (is7Days ? '#fff7ed' : '#fffbeb');
+  const statusBorder = isExpired ? '#fecaca' : (is7Days ? '#fed7aa' : '#fef08a');
 
   const mainHeader = isExpired 
-    ? `🚨 Urgent: ${medicineName} has Expired - Do Not Consume`
+    ? `Medication Expired: ${medicineName}`
     : (is7Days 
-        ? `⚠️ Expiry Warning: ${medicineName} expires in 7 days`
-        : `📅 Expiry Notice: ${medicineName} expires in 1 month`);
-
-  const introText = isExpired
-    ? `Our records show that <strong>${medicineName}</strong> has reached its expiration date (${expiryDate}). <strong>Please DO NOT take this medicine.</strong> Expired medications can lose chemical potency or produce dangerous degradation compounds.`
-    : (is7Days
-        ? `This is a reminder that <strong>${medicineName}</strong> will expire in approximately <strong>7 days</strong> (${expiryDate}). Please consult your physician or pharmacist to arrange a fresh refill before this date.`
-        : `This is an advance 1-month reminder that <strong>${medicineName}</strong> will expire next month on <strong>${expiryDate}</strong>.`);
-
-  const safetyCallout = isExpired
-    ? `<div class="safety-box" style="background-color: #fee2e2; border-left: 5px solid #dc2626; padding: 16px 18px; border-radius: 10px; margin: 20px 0; box-sizing: border-box; word-break: break-word;">
-        <h4 class="safety-title" style="color: #991b1b; margin: 0 0 10px 0; font-size: 15px; font-weight: 800; line-height: 1.4;">⚠️ Critical Disposal &amp; Safety Advisory:</h4>
-        <ul class="safety-list" style="color: #7f1d1d; margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6;">
-          <li style="margin-bottom: 8px;"><strong>DO NOT INGEST OR USE:</strong> Stop using this medicine immediately.</li>
-          <li style="margin-bottom: 8px;"><strong>Safe Disposal:</strong> Do not flush down toilets or throw loose in the trash. Take it to a designated pharmacy take-back drop-off or mix with coffee grounds in a sealed pouch before disposal.</li>
-          <li style="margin-bottom: 0;"><strong>Mark or Discard:</strong> Keep out of reach of children and separate from your active medicine box.</li>
-        </ul>
-      </div>`
-    : (is7Days
-        ? `<div class="safety-box" style="background-color: #ffedd5; border-left: 5px solid #ea580c; padding: 14px 16px; border-radius: 10px; margin: 20px 0; box-sizing: border-box; word-break: break-word;">
-            <p style="color: #9a3412; margin: 0; font-size: 13px; line-height: 1.5;">
-              <strong>Action required:</strong> You have only 7 days remaining before this medicine expires. Please plan your replacement or finish taking as scheduled under your doctor's supervision.
-            </p>
-          </div>`
-        : `<div class="safety-box" style="background-color: #fef3c7; border-left: 5px solid #f59e0b; padding: 14px 16px; border-radius: 10px; margin: 20px 0; box-sizing: border-box; word-break: break-word;">
-            <p style="color: #92400e; margin: 0; font-size: 13px; line-height: 1.5;">
-              <strong>Advance Notice:</strong> Expiry is scheduled for next month. Check your remaining pills to verify if you will need a renewal prescription.
-            </p>
-          </div>`);
+        ? `Refill Reminder: ${medicineName} Expires in 7 Days`
+        : `Advance Notice: ${medicineName} Expires in 30 Days`);
 
   return `<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="x-apple-disable-message-reformatting" />
-  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
   <title>${mainHeader}</title>
   <style type="text/css">
-    body, table, td, p, a, li, blockquote {
-      -webkit-text-size-adjust: 100%;
-      -ms-text-size-adjust: 100%;
+    body, table, td, p, a, li {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       word-break: break-word;
-      overflow-wrap: break-word;
-    }
-    table, td {
-      mso-table-lspace: 0pt;
-      mso-table-rspace: 0pt;
+      -webkit-text-size-adjust: 100%;
     }
     table {
       border-collapse: collapse !important;
-    }
-    body {
-      height: 100% !important;
-      margin: 0 !important;
-      padding: 0 !important;
       width: 100% !important;
-      background-color: #f2f5f8;
-    }
-    img {
-      border: 0;
-      height: auto;
-      line-height: 100%;
-      outline: none;
-      text-decoration: none;
-    }
-    @media only screen and (max-width: 600px) {
-      .email-wrapper {
-        padding: 10px 4px !important;
-        width: 100% !important;
-      }
-      .email-card-cell {
-        padding: 20px 12px !important;
-        border-radius: 12px !important;
-      }
-      .email-header {
-        font-size: 18px !important;
-        line-height: 1.35 !important;
-      }
-      .intro-text {
-        font-size: 13px !important;
-        line-height: 1.5 !important;
-      }
-      .med-table {
-        width: 100% !important;
-      }
-      .med-th {
-        padding: 9px 6px !important;
-        font-size: 10px !important;
-      }
-      .med-td {
-        padding: 10px 6px !important;
-        font-size: 11px !important;
-      }
-      .safety-box {
-        padding: 12px 10px !important;
-        margin: 14px 0 !important;
-      }
-      .safety-title {
-        font-size: 13px !important;
-      }
-      .safety-list {
-        padding-left: 16px !important;
-        font-size: 11px !important;
-      }
-      .btn-action {
-        display: block !important;
-        width: 100% !important;
-        text-align: center !important;
-        box-sizing: border-box !important;
-        padding: 12px 14px !important;
-      }
     }
   </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f2f5f8; width: 100% !important; min-width: 100% !important;">
-  <!-- Centering Outer Table for Flawless Mobile Email Client Rendering -->
-  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#f2f5f8" style="background-color: #f2f5f8; width: 100%; border-collapse: collapse;">
-    <tr>
-      <td align="center" class="email-wrapper" style="padding: 28px 12px;">
-        
-        <!-- Main Card Table -->
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; width: 100%; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03); overflow: hidden;">
-          <tr>
-            <td class="email-card-cell" style="padding: 30px 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-sizing: border-box;">
-              
-              <!-- Badge -->
-              <div style="margin-bottom: 12px;">
-                <span style="background-color: ${badgeBg}; border: 1px solid ${badgeBorder}; color: ${badgeTextColor}; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; display: inline-block;">
-                  ${badgeText}
-                </span>
-              </div>
+<body style="margin: 0; padding: 20px; background-color: #f8fafc; color: #1e293b;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+    
+    <!-- Top Header -->
+    <div style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0; background-color: #ffffff;">
+      <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">DawaSnap Medication Safety Notice</p>
+      <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #0f172a; line-height: 1.3;">${mainHeader}</h1>
+    </div>
 
-              <!-- Header -->
-              <h2 class="email-header" style="color: ${titleColor}; font-size: 20px; font-weight: 800; margin: 0 0 14px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.35;">
-                ${mainHeader}
-              </h2>
-              
-              <!-- Salutation & Intro -->
-              <p style="color: #374151; font-size: 14px; margin: 0 0 10px 0; line-height: 1.6;">Hello,</p>
-              <p class="intro-text" style="color: #374151; font-size: 14px; margin: 0 0 18px 0; line-height: 1.6;">
-                ${introText}
-              </p>
-
-              <!-- 1. MEDICINE DETAILS TABLE (PLACED FIRST) -->
-              <div style="width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; margin: 0 0 18px 0; background-color: #ffffff; box-sizing: border-box;">
-                <table class="med-table" role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0;">
-                  <thead>
-                    <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                      <th class="med-th" style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; border-right: 1px solid #e2e8f0; width: 44%; word-break: break-word;">Medicine Name</th>
-                      <th class="med-th" style="padding: 10px 8px; text-align: center; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; border-right: 1px solid #e2e8f0; width: 26%; word-break: break-word;">Remaining</th>
-                      <th class="med-th" style="padding: 10px 10px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; width: 30%; word-break: break-word;">Expiry Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style="background-color: #ffffff;">
-                      <td class="med-td" style="padding: 12px; font-size: 13px; font-weight: 700; color: #1e293b; border-right: 1px solid #e2e8f0; word-break: break-word;">${medicineName}</td>
-                      <td class="med-td" style="padding: 12px 8px; font-size: 13px; color: #334155; text-align: center; border-right: 1px solid #e2e8f0; word-break: break-word;">${stock} units</td>
-                      <td class="med-td" style="padding: 12px 10px; font-size: 13px; color: ${isExpired ? '#dc2626' : (is7Days ? '#ea580c' : '#d97706')}; font-weight: 800; word-break: break-word;">${expiryDate}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- 2. CRITICAL DISPOSAL & SAFETY ADVISORY (PLACED BELOW MEDICINE TABLE) -->
-              ${safetyCallout}
-
-              <!-- Action Button -->
-              <div style="margin: 22px 0 18px 0; text-align: left;">
-                <a href="https://dawasnap.vercel.app" target="_blank" class="btn-action" style="background-color: #0f9d58; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 13px; display: inline-block; box-shadow: 0 2px 4px rgba(15,157,88,0.2); box-sizing: border-box; text-align: center;">Open DawaSnap Vault</a>
-              </div>
-              
-              <!-- Footer Info -->
-              <p style="color: #94a3b8; font-size: 11px; margin: 20px 0 0 0; line-height: 1.5; border-top: 1px solid #f1f5f9; padding-top: 14px;">
-                This automated safety alert was delivered by <strong>DawaSnap AI</strong> based on your scheduled alert policy (1 month, 7 days &amp; expired). You can customize or mute these notifications anytime in your account settings.
-              </p>
-
-            </td>
+    <div style="padding: 24px;">
+      
+      <!-- 1. SUMMARY TABLE AT TOP -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr style="background-color: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
+            <th style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Medicine</th>
+            <th style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Status</th>
+            <th style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Expiry Date</th>
+            <th style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Stock</th>
+            <th style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Action</th>
           </tr>
-        </table>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 12px; font-size: 13px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #f1f5f9;">${medicineName}</td>
+            <td style="padding: 12px; font-size: 11px; border-bottom: 1px solid #f1f5f9;">
+              <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; background-color: ${statusBg}; color: ${statusColor}; border: 1px solid ${statusBorder};">
+                ${badgeText}
+              </span>
+            </td>
+            <td style="padding: 12px; font-size: 13px; font-weight: 600; color: #334155; border-bottom: 1px solid #f1f5f9;">${expiryDate}</td>
+            <td style="padding: 12px; font-size: 13px; color: #334155; border-bottom: 1px solid #f1f5f9;">${stock}</td>
+            <td style="padding: 12px; font-size: 12px; font-weight: 700; color: ${statusColor}; border-bottom: 1px solid #f1f5f9;">${actionText}</td>
+          </tr>
+        </tbody>
+      </table>
 
-      </td>
-    </tr>
-  </table>
+      <!-- 2. DETAILED DESCRIPTION & GOVERNMENT DISPOSAL ADVISORY BELOW TABLE -->
+      ${isExpired ? `
+      <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px 18px; margin-bottom: 20px;">
+        <h2 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #991b1b;">Important: Do Not Consume Expired Medication</h2>
+        <p style="margin: 0 0 12px 0; font-size: 13px; line-height: 1.6; color: #7f1d1d;">
+          This medication reached its official expiration date on <strong>${expiryDate}</strong>. Chemical composition can degrade, reducing efficacy or causing adverse reactions. Please discard this stock immediately.
+        </p>
+
+        <h3 style="margin: 12px 0 6px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #991b1b;">
+          Safe Disposal Instructions (Government & Municipal Guidelines):
+        </h3>
+        <ol style="margin: 0; padding-left: 20px; font-size: 12px; line-height: 1.6; color: #7f1d1d;">
+          <li style="margin-bottom: 6px;">
+            <strong>Discard in Household Dustbin / Dry Waste:</strong> Remove tablets or capsules from their original blister pack or box, mix them with undesirable household material (such as coffee grounds, sawdust, or soil) inside a sealed container or disposable pouch, and place them securely in your household dry waste dustbin. Keep away from children and domestic pets.
+          </li>
+          <li style="margin-bottom: 6px;">
+            <strong>Do Not Flush Down the Toilet or Sink:</strong> Never flush solid or liquid pharmaceuticals down drains or toilets, as compounds pass through water treatment and contaminate municipal water systems and aquatic ecosystems.
+          </li>
+          <li style="margin-bottom: 0;">
+            <strong>Authorized Pharmacy Take-Back:</strong> For liquid syrups, inhalers, or chemotherapy agents, drop off the remaining quantity at a designated pharmacy take-back collection box or government healthcare facility.
+          </li>
+        </ol>
+      </div>
+      ` : (is7Days ? `
+      <div style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 16px 18px; margin-bottom: 20px;">
+        <h2 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #9a3412;">Refill Action Required (7 Days Remaining)</h2>
+        <p style="margin: 0 0 8px 0; font-size: 13px; line-height: 1.6; color: #7c2d12;">
+          Your supply of <strong>${medicineName}</strong> will expire on <strong>${expiryDate}</strong>. 
+          Please contact your attending doctor or visit your local pharmacy to request a fresh prescription and replenish your supply before this date.
+        </p>
+        <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #9a3412;">
+          Do not save remaining doses beyond the expiration date. Any leftovers after ${expiryDate} must be discarded securely according to standard disposal rules.
+        </p>
+      </div>
+      ` : `
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 18px; margin-bottom: 20px;">
+        <h2 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #334155;">Advance Notice (30 Days Remaining)</h2>
+        <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #475569;">
+          Your current stock of <strong>${medicineName}</strong> is scheduled to expire on <strong>${expiryDate}</strong>. 
+          Please check your remaining quantity to determine if you need to schedule a renewal consultation with your doctor.
+        </p>
+      </div>
+      `)}
+
+      <!-- Link to open Vault -->
+      <div style="margin: 20px 0; text-align: left;">
+        <a href="https://dawasnap.cloud.run" target="_blank" style="display: inline-block; background-color: #0f172a; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-size: 12px; font-weight: 700;">
+          View Medicine in Vault
+        </a>
+      </div>
+
+      <!-- Footer Info -->
+      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 11px; color: #94a3b8; line-height: 1.5;">
+        <p style="margin: 0;">This official automated medical advisory was generated by DawaSnap AI based on your inventory tracking schedule.</p>
+        <p style="margin: 4px 0 0 0;">DawaSnap AI &bull; Medication Safety &amp; Inventory Management</p>
+      </div>
+
+    </div>
+  </div>
 </body>
 </html>`;
 }
 
 /**
- * Generates a clean, server-controlled HTML template for notifications and alerts.
- * Strictly prevents client HTML injection.
+ * Returns HTML for clean, professional Low Stock/Refill Alert email without emojis.
+ */
+export function getLowStockEmailHTMLServer(medicineName: string, stock: number | string, threshold: number | string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Refill Required: ${medicineName}</title>
+  <style type="text/css">
+    body, table, td, p, a {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      word-break: break-word;
+    }
+    table {
+      border-collapse: collapse !important;
+      width: 100% !important;
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 20px; background-color: #f8fafc; color: #1e293b;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+    <div style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0;">
+      <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">DawaSnap Inventory Notice</p>
+      <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #0f172a;">Refill Required: ${medicineName}</h1>
+    </div>
+
+    <div style="padding: 24px;">
+      <!-- TOP SUMMARY TABLE -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 0 20px 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr style="background-color: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
+            <th style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Medicine</th>
+            <th style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Remaining Stock</th>
+            <th style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Threshold</th>
+            <th style="padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 12px; font-size: 13px; font-weight: 700; color: #0f172a;">${medicineName}</td>
+            <td style="padding: 12px; font-size: 13px; font-weight: 700; color: #c2410c;">${stock} units</td>
+            <td style="padding: 12px; font-size: 13px; color: #64748b;">${threshold} units</td>
+            <td style="padding: 12px; font-size: 12px; font-weight: 700; color: #c2410c;">Refill Required</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- INSTRUCTIONS -->
+      <div style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
+        <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #7c2d12;">
+          Your tracked balance for <strong>${medicineName}</strong> has dropped below your minimum threshold (${threshold} units). 
+          Please arrange a refill with your healthcare provider or pharmacy to prevent missing daily doses.
+        </p>
+      </div>
+
+      <div style="margin: 20px 0; text-align: left;">
+        <a href="https://dawasnap.cloud.run" target="_blank" style="display: inline-block; background-color: #0f172a; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-size: 12px; font-weight: 700;">
+          Update Stock in Vault
+        </a>
+      </div>
+
+      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 11px; color: #94a3b8;">
+        This automated inventory notification was generated by DawaSnap AI.
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Generates a clean, server-controlled HTML template for notifications without emojis.
  */
 export function getGeneralNotificationHTMLServer(subject: string, messageText: string): string {
-  const safeSubject = (subject || "DawaSnap Alert").replace(/[<>&"']/g, (c) => {
+  const safeSubject = (subject || "DawaSnap Notification").replace(/[<>&"']/g, (c) => {
     switch (c) {
       case '<': return '&lt;';
       case '>': return '&gt;';
@@ -243,17 +257,16 @@ export function getGeneralNotificationHTMLServer(subject: string, messageText: s
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${safeSubject}</title>
 </head>
-<body style="margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b;">
-  <div style="max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-    <div style="background-color: #0f9d58; padding: 20px 24px; color: #ffffff;">
-      <h2 style="margin: 0; font-size: 18px; font-weight: 700;">DawaSnap AI Safety Alerts</h2>
+<body style="margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+    <div style="background-color: #0f172a; padding: 18px 24px; color: #ffffff;">
+      <p style="margin: 0 0 4px 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">DawaSnap AI</p>
+      <h2 style="margin: 0; font-size: 18px; font-weight: 700;">${safeSubject}</h2>
     </div>
-    <div style="padding: 24px; font-size: 15px; line-height: 1.6;">
-      <h3 style="margin-top: 0; color: #0f172a; font-size: 16px; font-weight: 700;">${safeSubject}</h3>
-      <div style="color: #334155; margin-top: 12px;">${safeMessage}</div>
-      <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #64748b;">
-        <p style="margin: 0;">This is an automated safety advisory generated securely by DawaSnap AI.</p>
-        <p style="margin: 4px 0 0 0;">Never consume expired or degraded medications. Consult a licensed pharmacist or physician.</p>
+    <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
+      ${safeMessage}
+      <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #f1f5f9; font-size: 11px; color: #94a3b8;">
+        This is an official communication delivered by DawaSnap AI.
       </div>
     </div>
   </div>
@@ -263,7 +276,7 @@ export function getGeneralNotificationHTMLServer(subject: string, messageText: s
 
 /**
  * Dispatches an email via Resend directly from the backend server.
- * Uses verified domain alerts@noorpos.in. Strictly excludes unverified third-party fallback.
+ * Uses verified domain alerts@noorpos.in.
  */
 export async function sendEmailDirectServer(to: string, subject: string, html: string, text: string) {
   let apiKey = process.env.RESEND_API_KEY;
@@ -274,6 +287,19 @@ export async function sendEmailDirectServer(to: string, subject: string, html: s
   const isKeyInvalid = !apiKey || apiKey === 'YOUR_API_KEY' || apiKey.includes('YOUR_RESEND_API_KEY');
   if (isKeyInvalid) {
     console.log(`[BACKGROUND EXPIRY EMAIL SIMULATED] To: ${to} | Subject: ${subject}`);
+    if (hasServiceAccountConfigured()) {
+      try {
+        const db = getAdminDb();
+        await db.collection("mail").add({
+          to: to.trim().toLowerCase(),
+          message: { subject, html, text },
+          delivery: { state: 'SIMULATED', attempts: 1 },
+          timestamp: new Date()
+        });
+      } catch (logErr) {
+        console.warn("[MAILBOX LOG ERROR (SIMULATED)]", logErr);
+      }
+    }
     return { success: true, simulated: true };
   }
 
@@ -290,6 +316,20 @@ export async function sendEmailDirectServer(to: string, subject: string, html: s
     if (error) {
       console.warn("[RESEND ERROR]", error);
       return { success: false, error: error.message };
+    }
+
+    if (hasServiceAccountConfigured()) {
+      try {
+        const db = getAdminDb();
+        await db.collection("mail").add({
+          to: to.trim().toLowerCase(),
+          message: { subject, html, text },
+          delivery: { state: 'SUCCESS', attempts: 1 },
+          timestamp: new Date()
+        });
+      } catch (logErr) {
+        console.warn("[MAILBOX LOG ERROR (SENT)]", logErr);
+      }
     }
 
     return { success: true, id: data?.id };

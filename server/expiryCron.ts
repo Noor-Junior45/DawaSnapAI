@@ -1,6 +1,6 @@
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
-import { sendEmailDirectServer, getExpiryEmailHTMLServer, type ExpiryStage } from "./emailTemplates.ts";
+import { sendEmailDirectServer, getExpiryEmailHTMLServer, getExpiryEmailSubject, type ExpiryStage } from "./emailTemplates.ts";
 import { getAdminApp, hasServiceAccountConfigured } from "./firebaseAdmin.ts";
 
 let cachedDb: Firestore | null = null;
@@ -200,18 +200,14 @@ export async function runBackgroundExpiryCheck(): Promise<{ checked: number; sen
             claimedAt: new Date().toISOString()
           });
 
-          // Construct email content
-          const subject = stageToSend === 'EXPIRED'
-            ? `🚨 Urgent: ${m.name} has Expired - Please Dispose Safely`
-            : (stageToSend === '7_DAYS'
-                ? `⚠️ Expiry Warning: ${m.name} expires in 7 days`
-                : `📅 Expiry Notice: ${m.name} expires in 1 month`);
+          // Construct email content (professional, no emojis)
+          const subject = getExpiryEmailSubject(m.name, stageToSend);
 
           const text = stageToSend === 'EXPIRED'
-            ? `DawaSnap AI Alert: Your medicine ${m.name} has expired on ${m.expirationDate}. Please do NOT consume this medication and dispose of it safely.`
+            ? `DawaSnap Safety Advisory: Your medicine ${m.name} reached its expiration date on ${m.expirationDate}. Please do not consume this medication and discard it securely in accordance with government disposal guidelines.`
             : (stageToSend === '7_DAYS'
-                ? `DawaSnap AI Alert: Your medicine ${m.name} will expire in 7 days on ${m.expirationDate}. Please consult your doctor or pharmacy for a refill.`
-                : `DawaSnap AI Alert: Your medicine ${m.name} will expire in 1 month on ${m.expirationDate}.`);
+                ? `DawaSnap Refill Notice: Your medicine ${m.name} expires in 7 days on ${m.expirationDate}. Please consult your physician or pharmacy for a refill.`
+                : `DawaSnap Advance Notice: Your medicine ${m.name} is scheduled to expire on ${m.expirationDate}.`);
 
           const html = getExpiryEmailHTMLServer(
             m.name, 

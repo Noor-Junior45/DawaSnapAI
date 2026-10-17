@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Medicine, MedicineForm } from '../types';
 import { 
   Calendar, Package, AlertTriangle, CheckCircle2, Clock, Trash2, 
-  CheckSquare, Square, Minus, Heart, Layers, Edit3, XCircle, AlertCircle, 
-  ChevronDown, ChevronUp, Sparkles, Filter, RefreshCw, X, Plus, Zap
+  CheckSquare, Square, Layers, Edit3, XCircle, AlertCircle, 
+  Filter, RefreshCw, Zap, ArrowUp, ArrowDown, ChevronRight
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { MEDICINE_FORM_ICONS, getCategoryStyle, isCategoryMatch, getMedicineCategories } from '../constants';
-import { LocalImage } from './LocalImage';
 import { triggerLightHaptic, triggerMediumHaptic, triggerSelectionHaptic, triggerSuccessHaptic } from '../utils/haptics';
 
 interface MedicineListProps {
@@ -31,6 +30,8 @@ interface MedicineListProps {
   setSelectedIds?: React.Dispatch<React.SetStateAction<Set<string>>>;
   totalMedicinesCount?: number;
   sortOrder?: 'default' | 'asc' | 'desc';
+  customCardOrder?: string[];
+  onSaveCustomOrder?: (newOrder: string[]) => void;
 }
 
 interface GroupedMedicine {
@@ -41,7 +42,6 @@ interface GroupedMedicine {
   schedule?: string;
   usageInstructions?: string;
   imageUrl?: string;
-  liked?: boolean;
   category?: string;
   categories?: string[];
   tags: string[];
@@ -56,11 +56,455 @@ interface GroupedMedicine {
   nearestActiveBatch?: Medicine;
   earliestExpiredBatch?: Medicine;
   allBatches: Medicine[];
+  customOrder?: number;
 }
+
+const getDiffDays = (dateStr?: string): number => {
+  if (!dateStr) return 9999;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const expiry = new Date();
+  if (year && month && day && !isNaN(year) && !isNaN(month) && !isNaN(day)) {
+    expiry.setFullYear(year, month - 1, day);
+  } else {
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) {
+      parsed.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return Math.round((parsed.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
+    return 9999;
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expiry.setHours(0, 0, 0, 0);
+  return Math.round((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+const formatDisplayDate = (dateStr?: string) => {
+  if (!dateStr) return 'N/A';
+  const [year, month, day] = dateStr.split('-').map(Number);
+  if (year && month && day && !isNaN(year) && !isNaN(month) && !isNaN(day)) {
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  }
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+};
+
+const getExpiryStatus = (dateStr?: string, alertThreshold = 90) => {
+  if (!dateStr) {
+    return { label: 'No Date', color: 'text-slate-500', bg: 'bg-slate-100', Icon: Clock };
+  }
+  const diffDays = getDiffDays(dateStr);
+  const effectiveThreshold = alertThreshold === 90 ? 92 : alertThreshold;
+
+  if (diffDays < 0) return { label: 'Expired', color: 'text-[#ea4335]', bg: 'bg-rose-50 border border-rose-100', Icon: XCircle };
+  if (diffDays === 0) return { label: 'Expiring Today', color: 'text-[#f2a154]', bg: 'bg-amber-50 border border-amber-100', Icon: AlertTriangle };
+  if (diffDays <= 10) return { label: 'Expiring Soon (10d)', color: 'text-[#f2a154]', bg: 'bg-amber-50 border border-amber-100', Icon: AlertTriangle };
+  if (diffDays <= effectiveThreshold) {
+    const label = alertThreshold === 90 ? 'Expiring in 3mo' : `Expiring in ${alertThreshold}d`;
+    return { label, color: 'text-[#ab47bc]', bg: 'bg-purple-50 border border-purple-100', Icon: Clock };
+  }
+  if (diffDays <= 180) return { label: 'Expiring in 6mo', color: 'text-[#1a73e8]', bg: 'bg-blue-50 border border-blue-100', Icon: Clock };
+  return { label: 'Safe', color: 'text-[#0f9d58]', bg: 'bg-emerald-50 border border-emerald-100', Icon: CheckCircle2 };
+};
+
+// Hexagonal dot design SVG icon: 2 dots in 1st column, 3 dots in 2nd column, 2 dots in 3rd column
+const HexagonalDotGrip: React.FC<{ className?: string }> = ({ className = "" }) => (
+  <svg 
+    width="15" 
+    height="18" 
+    viewBox="0 0 16 18" 
+    fill="currentColor" 
+    className={`shrink-0 ${className}`}
+    aria-hidden="true"
+  >
+    {/* 1st column: 2 dots */}
+    <circle cx="3.2" cy="6.0" r="1.35" />
+    <circle cx="3.2" cy="12.0" r="1.35" />
+    {/* 2nd column: 3 dots (vertical axis of hexagon) */}
+    <circle cx="8.0" cy="3.0" r="1.35" />
+    <circle cx="8.0" cy="9.0" r="1.35" />
+    <circle cx="8.0" cy="15.0" r="1.35" />
+    {/* 3rd column: 2 dots */}
+    <circle cx="12.8" cy="6.0" r="1.35" />
+    <circle cx="12.8" cy="12.0" r="1.35" />
+  </svg>
+);
+
+// Helper to parse prominent brand name and active generic/salt formula if combined in medicine name
+export function parseMedicineName(rawName: string): { brandName: string; genericName?: string } {
+  if (!rawName) return { brandName: 'Unnamed Medicine' };
+  const trimmed = rawName.trim();
+
+  // Pattern 1: Brand Name (Generic / Salt Composition) or [Generic]
+  const parenMatch = trimmed.match(/^([^(]+?)\s*(\(([^)]+)\)|\[([^\]]+)\])$/);
+  if (parenMatch && parenMatch[1].trim().length > 0) {
+    const brand = parenMatch[1].trim();
+    const generic = (parenMatch[3] || parenMatch[4] || '').trim();
+    if (brand.length > 0 && generic.length > 0) {
+      return { brandName: brand, genericName: generic };
+    }
+  }
+
+  // Pattern 2: Brand - Generic (only if separated by space hyphen space or colon with clear salt words)
+  const hyphenMatch = trimmed.match(/^([^-:]+?)\s+[-:]\s+([A-Za-z0-9].*)$/);
+  if (hyphenMatch && hyphenMatch[1].trim().length >= 2) {
+    const brand = hyphenMatch[1].trim();
+    const generic = hyphenMatch[2].trim();
+    if (brand.length > 0 && generic.length > 0) {
+      return { brandName: brand, genericName: generic };
+    }
+  }
+
+  return { brandName: trimmed };
+}
+
+interface ActiveGroupCardProps {
+  group: GroupedMedicine;
+  index: number;
+  totalGroups: number;
+  isCustomOrderActive: boolean;
+  isSelectionMode: boolean;
+  selectedIds: Set<string>;
+  toggleSelectGroup: (batches: Medicine[]) => void;
+  onEdit: (medicine: Medicine) => void;
+  onReduceQuantity: (medicine: Medicine) => void;
+  lowQuantityThreshold: number;
+  alertThreshold: number;
+  selectedCategory: string;
+  onSelectCategory?: (category: string) => void;
+  onMovePosition: (groupKey: string, newPosition: number) => void;
+}
+
+const ActiveGroupCard: React.FC<ActiveGroupCardProps> = ({
+  group,
+  index,
+  totalGroups,
+  isCustomOrderActive,
+  isSelectionMode,
+  selectedIds,
+  toggleSelectGroup,
+  onEdit,
+  onReduceQuantity,
+  lowQuantityThreshold,
+  alertThreshold,
+  selectedCategory,
+  onSelectCategory,
+  onMovePosition
+}) => {
+  const dragControls = useDragControls();
+  const [showOrderMenu, setShowOrderMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showOrderMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowOrderMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showOrderMenu]);
+
+  const nearestBatch = group.nearestActiveBatch;
+  const nearestExpiry = nearestBatch?.expirationDate;
+  const status = getExpiryStatus(nearestExpiry, alertThreshold);
+  const diffDays = getDiffDays(nearestExpiry);
+
+  const effectiveThreshold = alertThreshold === 90 ? 92 : alertThreshold;
+  const isExpiringSoon = diffDays >= 0 && diffDays <= 10;
+  const isExpiringAlert = diffDays > 10 && diffDays <= effectiveThreshold;
+  const isAlertEnabled = group.enableLowStockAlert !== false;
+  const threshold = group.lowStockThreshold ?? lowQuantityThreshold;
+  const isLowQuantity = isAlertEnabled && group.hasActiveQuantities && group.totalActiveQuantity <= threshold;
+  const needsAttention = isExpiringSoon || isExpiringAlert || isLowQuantity;
+
+  const activeBatchIds = group.activeBatches.map(b => b.id);
+  const allActiveSelected = activeBatchIds.length > 0 && activeBatchIds.every(id => selectedIds.has(id));
+
+  return (
+    <Reorder.Item
+      value={group}
+      id={group.groupKey}
+      dragListener={false}
+      dragControls={dragControls}
+      className={`w-full text-left relative overflow-hidden border-2 rounded-3xl p-5 transition-all shadow-sm select-none ${
+        allActiveSelected ? 'bg-white border-[#0f9d58] shadow-[0_12px_40px_rgba(15,157,88,0.06)]' :
+        isExpiringSoon ? 'bg-white border-orange-500 hover:border-orange-600 hover:bg-orange-50/20' :
+        isExpiringAlert ? 'bg-white border-purple-500 hover:border-purple-600 hover:bg-purple-50/20' :
+        isLowQuantity ? 'bg-white border-amber-500 hover:border-amber-600 hover:bg-amber-50/20' :
+        'bg-white border-blue-400 hover:border-blue-500 hover:bg-blue-50/20'
+      }`}
+      animate={{
+        ...(needsAttention && !allActiveSelected ? {
+          boxShadow: isExpiringSoon 
+            ? ['0px 0px 0px rgba(249,115,22,0)', '0px 0px 15px rgba(249,115,22,0.15)', '0px 0px 0px rgba(249,115,22,0)']
+            : isExpiringAlert || isLowQuantity
+              ? ['0px 0px 0px rgba(234,179,8,0)', '0px 0px 15px rgba(234,179,8,0.15)', '0px 0px 0px rgba(234,179,8,0)']
+              : undefined,
+        } : {})
+      }}
+      transition={{
+        layout: { type: "spring", stiffness: 350, damping: 30 },
+        ...(needsAttention && !allActiveSelected ? {
+          boxShadow: { repeat: Infinity, duration: 2, ease: "easeInOut" }
+        } : {})
+      }}
+    >
+      {/* Card Header */}
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex items-start gap-2.5 flex-1 overflow-hidden">
+          {isSelectionMode && (
+            <button 
+              type="button"
+              onClick={() => toggleSelectGroup(group.activeBatches)}
+              className="mt-1 text-slate-400 shrink-0 hover:text-[#0f9d58] transition-colors"
+            >
+              {allActiveSelected ? <CheckSquare size={18} className="text-[#0f9d58]" /> : <Square size={18} />}
+            </button>
+          )}
+          
+          <div 
+            className="flex-1 min-w-0 cursor-pointer"
+            onClick={() => {
+              triggerLightHaptic();
+              if (isSelectionMode) {
+                toggleSelectGroup(group.activeBatches);
+              } else if (nearestBatch) {
+                onEdit(nearestBatch);
+              }
+            }}
+          >
+            {/* Title Line: 5-dot design handle + position indicator + medicine name */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* 5-dot design drag handle button right in front of medicine name */}
+              <div className="relative inline-flex items-center" ref={menuRef}>
+                <button
+                  type="button"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    if (isCustomOrderActive && !isSelectionMode) {
+                      triggerLightHaptic();
+                      dragControls.start(e);
+                    }
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isCustomOrderActive && !isSelectionMode) {
+                      triggerLightHaptic();
+                      setShowOrderMenu(prev => !prev);
+                    }
+                  }}
+                  className={`p-1 -ml-1 sm:p-1.5 rounded-lg text-slate-400 hover:text-slate-800 active:text-blue-600 transition-colors touch-none select-none flex items-center justify-center ${
+                    isCustomOrderActive ? 'cursor-grab active:cursor-grabbing hover:bg-slate-100' : 'opacity-40 cursor-not-allowed'
+                  }`}
+                  title={isCustomOrderActive ? "Hold & drag handle up or down to reorder, or click for quick move" : "Custom drag ordering is available when no A-Z / Z-A filter is selected"}
+                  aria-label="Drag up or down to customize order"
+                >
+                  <HexagonalDotGrip className="text-slate-500 hover:text-slate-800" />
+                </button>
+
+                {/* Quick Reorder Popover Menu */}
+                {showOrderMenu && isCustomOrderActive && (
+                  <div 
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 min-w-[145px] text-xs flex flex-col gap-0.5"
+                  >
+                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-0.5">
+                      Place #{index + 1} at:
+                    </div>
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => {
+                        triggerLightHaptic();
+                        onMovePosition(group.groupKey, 0);
+                        setShowOrderMenu(false);
+                      }}
+                      className="px-2 py-1.5 text-left rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-between text-slate-700 font-medium cursor-pointer"
+                    >
+                      <span>Top (#1)</span>
+                      <ArrowUp size={12} className="text-slate-400" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => {
+                        triggerLightHaptic();
+                        onMovePosition(group.groupKey, index - 1);
+                        setShowOrderMenu(false);
+                      }}
+                      className="px-2 py-1.5 text-left rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-between text-slate-700 font-medium cursor-pointer"
+                    >
+                      <span>Move Up</span>
+                      <ArrowUp size={12} className="text-slate-400" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === totalGroups - 1}
+                      onClick={() => {
+                        triggerLightHaptic();
+                        onMovePosition(group.groupKey, index + 1);
+                        setShowOrderMenu(false);
+                      }}
+                      className="px-2 py-1.5 text-left rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-between text-slate-700 font-medium cursor-pointer"
+                    >
+                      <span>Move Down</span>
+                      <ArrowDown size={12} className="text-slate-400" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === totalGroups - 1}
+                      onClick={() => {
+                        triggerLightHaptic();
+                        onMovePosition(group.groupKey, totalGroups - 1);
+                        setShowOrderMenu(false);
+                      }}
+                      className="px-2 py-1.5 text-left rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-between text-slate-700 font-medium cursor-pointer"
+                    >
+                      <span>Bottom (#{totalGroups})</span>
+                      <ArrowDown size={12} className="text-slate-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <h3 className="font-bold text-base sm:text-lg tracking-tight text-[#1f1f1f] hover:text-[#0f9d58] transition-colors truncate">
+                {group.name}
+              </h3>
+              <span className="shrink-0 scale-90 sm:scale-100">{group.form && MEDICINE_FORM_ICONS[group.form]}</span>
+              {group.activeBatches.length > 1 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
+                  <Layers size={10} />
+                  {group.activeBatches.length} Batches
+                </span>
+              )}
+              {group.expiredOrEmptyBatches.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                  <XCircle size={10} />
+                  {group.expiredOrEmptyBatches.length} Expired
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span className="flex items-center gap-1 text-slate-500 text-[11px] sm:text-xs">
+                <Package size={12} className="text-slate-400" />
+                {group.dosage}
+              </span>
+              {group.schedule && (
+                <span className="flex items-center gap-1 text-[#1a73e8] text-[11px] sm:text-xs font-semibold">
+                  <Clock size={12} className="text-[#1a73e8]" />
+                  <span className="truncate max-w-[120px]">{group.schedule}</span>
+                </span>
+              )}
+              <span className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}>
+                {status.label}
+              </span>
+            </div>
+
+            {/* Category Badges */}
+            {(() => {
+              const cats = Array.from(new Set(getMedicineCategories(group)));
+              if (cats.length === 0) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  {cats.map((cat, cIdx) => {
+                    const style = getCategoryStyle(cat);
+                    const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
+                    return (
+                      <span 
+                        key={`cat-${group.groupKey}-${cat.toLowerCase()}-${cIdx}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onSelectCategory) {
+                            onSelectCategory(isSelected ? 'ALL' : cat);
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer hover:opacity-90 ${style.badgeBg} ${style.badgeText} ${style.badgeBorder} ${isSelected ? 'ring-1 ring-current' : ''}`}
+                        title={`Filter by category: ${cat}`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${style.dotColor}`} />
+                        {cat}
+                      </span>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Right side Actions: Redesigned -1 button (Transparent circle with red text) */}
+        {!isSelectionMode && (
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {nearestBatch && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (nearestBatch.quantity !== undefined && nearestBatch.quantity > 0) {
+                    triggerMediumHaptic();
+                    onReduceQuantity(nearestBatch);
+                  }
+                }}
+                disabled={nearestBatch.quantity === undefined || nearestBatch.quantity <= 0}
+                className={`w-8 h-8 rounded-full text-xs sm:text-[13px] font-black tracking-tight border transition-all active:scale-90 flex items-center justify-center shrink-0 ${
+                  nearestBatch.quantity !== undefined && nearestBatch.quantity > 0
+                    ? 'bg-transparent hover:bg-red-500/10 active:bg-red-500/20 border-red-300/80 hover:border-red-500 text-red-600 shadow-2xs cursor-pointer'
+                    : 'bg-transparent border-slate-200/60 text-slate-300 cursor-not-allowed opacity-40'
+                }`}
+                title={nearestBatch.quantity !== undefined && nearestBatch.quantity > 0 ? "Take / Reduce 1 from nearest expiring batch" : "Stock is zero"}
+                aria-label="Reduce 1"
+              >
+                <span className="leading-none select-none text-red-600 font-black">-1</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Outside Information Bar: Nearest Expiration & Total Active Quantity */}
+      <div className={`flex items-center justify-between mt-2 pt-2 border-t border-slate-100 ${isSelectionMode ? 'ml-7' : ''}`}>
+        <div className="flex items-center gap-1.5 text-slate-600 text-[11px] font-mono font-semibold">
+          <Calendar size={13} className="text-slate-400" />
+          <span>
+            Nearest Expiry: <span className="font-bold text-[#1f1f1f]">{formatDisplayDate(nearestExpiry)}</span>
+          </span>
+        </div>
+
+        {group.hasActiveQuantities && (
+          <div className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg flex items-center gap-1 ${
+            isLowQuantity 
+              ? 'text-[#f2a154] bg-orange-50 border border-orange-100' 
+              : 'text-slate-700 bg-slate-100 border border-slate-200'
+          }`}>
+            {isLowQuantity && <AlertCircle size={10} className="text-orange-500" />}
+            <span>{group.totalActiveQuantity} LEFT</span>
+          </div>
+        )}
+      </div>
+
+      {/* Usage Instructions if present */}
+      {group.usageInstructions && (
+        <p className={`mt-2 text-slate-500 text-[10px] line-clamp-1 italic ${isSelectionMode ? 'ml-7' : ''}`}>
+          {group.usageInstructions}
+        </p>
+      )}
+    </Reorder.Item>
+  );
+};
 
 export const MedicineList: React.FC<MedicineListProps> = ({ 
   medicines, onEdit, onToggleTaken, onReduceQuantity, onDeleteMultiple, 
-  lowQuantityThreshold, alertThreshold, onToggleLike, onAutoCategorize, isCategorizing = false,
+  lowQuantityThreshold, alertThreshold, onAutoCategorize, isCategorizing = false,
   onAutoAllotFormulations, isAllottingFormulations = false,
   selectedCategory = 'ALL', onSelectCategory,
   isSelectionMode: propIsSelectionMode,
@@ -68,7 +512,9 @@ export const MedicineList: React.FC<MedicineListProps> = ({
   selectedIds: propSelectedIds,
   setSelectedIds: propSetSelectedIds,
   totalMedicinesCount = 0,
-  sortOrder = 'default'
+  sortOrder = 'default',
+  customCardOrder: propCustomCardOrder,
+  onSaveCustomOrder
 }) => {
   const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(new Set());
   const [internalIsSelectionMode, setInternalIsSelectionMode] = useState(false);
@@ -79,32 +525,23 @@ export const MedicineList: React.FC<MedicineListProps> = ({
   const setIsSelectionMode = propSetIsSelectionMode !== undefined ? propSetIsSelectionMode : setInternalIsSelectionMode;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
 
-  const toggleGroupExpanded = (groupKey: string) => {
-    setExpandedGroupKeys(prev => {
-      const next = new Set(prev);
-      if (next.has(groupKey)) {
-        next.delete(groupKey);
-      } else {
-        next.add(groupKey);
-      }
-      return next;
-    });
-  };
+  // Custom Card Drag & Drop Order State
+  const [customCardOrder, setCustomCardOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('dawasnap_custom_card_order');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return propCustomCardOrder || [];
+  });
 
-  const toggleSelection = (id: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
+  useEffect(() => {
+    if (propCustomCardOrder && Array.isArray(propCustomCardOrder) && propCustomCardOrder.length > 0) {
+      setCustomCardOrder(propCustomCardOrder);
     }
-    setSelectedIds(newSelected);
-    if (newSelected.size === 0) {
-      setIsSelectionMode(false);
-    }
-  };
+  }, [propCustomCardOrder]);
+
+  const isCustomOrderActive = sortOrder !== 'asc' && sortOrder !== 'desc';
 
   const toggleSelectGroup = (groupBatches: Medicine[]) => {
     const groupIds = groupBatches.map(b => b.id);
@@ -145,61 +582,6 @@ export const MedicineList: React.FC<MedicineListProps> = ({
     setShowDeleteConfirm(false);
   };
 
-  const getDiffDays = (dateStr?: string): number => {
-    if (!dateStr) return 9999;
-    const [year, month, day] = dateStr.split('-').map(Number);
-    const expiry = new Date();
-    if (year && month && day && !isNaN(year) && !isNaN(month) && !isNaN(day)) {
-      expiry.setFullYear(year, month - 1, day);
-    } else {
-      const parsed = new Date(dateStr);
-      if (!isNaN(parsed.getTime())) {
-        parsed.setHours(0, 0, 0, 0);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return Math.round((parsed.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      }
-      return 9999;
-    }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    expiry.setHours(0, 0, 0, 0);
-    return Math.round((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  const getExpiryStatus = (dateStr?: string) => {
-    if (!dateStr) {
-      return { label: 'No Date', color: 'text-slate-500', bg: 'bg-slate-100', Icon: Clock };
-    }
-    const diffDays = getDiffDays(dateStr);
-    const effectiveThreshold = alertThreshold === 90 ? 92 : alertThreshold;
-
-    if (diffDays < 0) return { label: 'Expired', color: 'text-[#ea4335]', bg: 'bg-rose-50 border border-rose-100', Icon: XCircle };
-    if (diffDays === 0) return { label: 'Expiring Today', color: 'text-[#f2a154]', bg: 'bg-amber-50 border border-amber-100', Icon: AlertTriangle };
-    if (diffDays <= 10) return { label: 'Expiring Soon (10d)', color: 'text-[#f2a154]', bg: 'bg-amber-50 border border-amber-100', Icon: AlertTriangle };
-    if (diffDays <= effectiveThreshold) {
-      const label = alertThreshold === 90 ? 'Expiring in 3mo' : `Expiring in ${alertThreshold}d`;
-      return { label, color: 'text-[#ab47bc]', bg: 'bg-purple-50 border border-purple-100', Icon: Clock };
-    }
-    if (diffDays <= 180) return { label: 'Expiring in 6mo', color: 'text-[#1a73e8]', bg: 'bg-blue-50 border border-blue-100', Icon: Clock };
-    return { label: 'Safe', color: 'text-[#0f9d58]', bg: 'bg-emerald-50 border border-emerald-100', Icon: CheckCircle2 };
-  };
-
-  const formatDisplayDate = (dateStr?: string) => {
-    if (!dateStr) return 'N/A';
-    const [year, month, day] = dateStr.split('-').map(Number);
-    if (year && month && day && !isNaN(year) && !isNaN(month) && !isNaN(day)) {
-      const date = new Date(year, month - 1, day);
-      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-    }
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-    } catch {
-      return dateStr;
-    }
-  };
-
   // Group medicines by normalized name
   const groupedMedicinesMap = React.useMemo(() => {
     const map = new Map<string, GroupedMedicine>();
@@ -223,7 +605,6 @@ export const MedicineList: React.FC<MedicineListProps> = ({
           schedule: med.schedule,
           usageInstructions: med.usageInstructions,
           imageUrl: med.imageUrl,
-          liked: med.liked,
           category: med.category,
           tags: Array.isArray(med.tags) ? [...med.tags] : [],
           enableLowStockAlert: med.enableLowStockAlert,
@@ -234,19 +615,21 @@ export const MedicineList: React.FC<MedicineListProps> = ({
           totalExpiredQuantity: 0,
           hasActiveQuantities: false,
           hasExpiredQuantities: false,
-          allBatches: []
+          allBatches: [],
+          customOrder: med.customOrder
         };
         map.set(groupKey, group);
       }
 
       group.allBatches.push(med);
-      if (med.liked) group.liked = true;
+      if (med.customOrder !== undefined && (group.customOrder === undefined || med.customOrder < group.customOrder)) {
+        group.customOrder = med.customOrder;
+      }
       if (!group.form && med.form) group.form = med.form;
       if (!group.schedule && med.schedule) group.schedule = med.schedule;
       if (!group.usageInstructions && med.usageInstructions) group.usageInstructions = med.usageInstructions;
       if (!group.imageUrl && med.imageUrl) group.imageUrl = med.imageUrl;
 
-      // Inherit and collect all categories and tags across batches for this medication group
       if (!group.categories) group.categories = [];
       const medCats = getMedicineCategories(med);
       medCats.forEach(c => {
@@ -265,7 +648,6 @@ export const MedicineList: React.FC<MedicineListProps> = ({
         });
       }
 
-      // Group alert settings: if any batch explicitly has disabled/enabled
       if (med.enableLowStockAlert !== undefined) {
         group.enableLowStockAlert = med.enableLowStockAlert;
       }
@@ -288,16 +670,12 @@ export const MedicineList: React.FC<MedicineListProps> = ({
       }
     });
 
-    // Sort batches within each group
     map.forEach(group => {
-      // Sort active batches by nearest expiration date (ascending diffDays: nearest expiring first)
       group.activeBatches.sort((a, b) => getDiffDays(a.expirationDate) - getDiffDays(b.expirationDate));
 
-      // In expiredOrEmptyBatches: separate genuinely expired (diffDays < 0) from empty/inactive
       const genuinelyExpired = group.expiredOrEmptyBatches.filter(b => getDiffDays(b.expirationDate) < 0);
       const otherInactive = group.expiredOrEmptyBatches.filter(b => getDiffDays(b.expirationDate) >= 0);
 
-      // Sort expired batches so the most relevant expired batch comes first
       genuinelyExpired.sort((a, b) => getDiffDays(a.expirationDate) - getDiffDays(b.expirationDate));
       otherInactive.sort((a, b) => getDiffDays(a.expirationDate) - getDiffDays(b.expirationDate));
 
@@ -314,7 +692,6 @@ export const MedicineList: React.FC<MedicineListProps> = ({
     return map;
   }, [medicines]);
 
-  // Count of medicines needing organization (medicines missing category or explicitly uncategorized)
   const uncategorizedCount = React.useMemo(() => {
     return medicines.filter(m => !m.isDeleted && (
       !m.category ||
@@ -323,7 +700,6 @@ export const MedicineList: React.FC<MedicineListProps> = ({
     )).length;
   }, [medicines]);
 
-  // Count of medicines whose formulation has not been allotted yet (missing or 'other')
   const unallottedFormulationCount = React.useMemo(() => {
     return medicines.filter(m => !m.isDeleted && (
       !m.form ||
@@ -332,14 +708,12 @@ export const MedicineList: React.FC<MedicineListProps> = ({
     )).length;
   }, [medicines]);
 
-  // Total count of unallocated items (unallotted formulations + uncategorized categories across all sections)
   const totalUnallocatedCount = React.useMemo(() => {
     return unallottedFormulationCount + uncategorizedCount;
   }, [unallottedFormulationCount, uncategorizedCount]);
 
   const hasUnallocatedItems = totalUnallocatedCount > 0;
 
-  // Filter matcher for groups using universal canonical isCategoryMatch
   const matchesFilter = (group: GroupedMedicine) => {
     if (selectedCategory !== 'ALL') {
       return isCategoryMatch(group, selectedCategory);
@@ -347,16 +721,14 @@ export const MedicineList: React.FC<MedicineListProps> = ({
     return true;
   };
 
-  // Separate active groups and expired groups with filtering applied
-  // If a medicine has both safe and expired batches, show safe in activeGroups and expired in expiredGroups
-  const activeGroups = Array.from(groupedMedicinesMap.values())
-    .filter(g => g.activeBatches.length > 0)
-    .filter(matchesFilter)
-    .sort((a, b) => {
-      if (a.liked && !b.liked) return -1;
-      if (!a.liked && b.liked) return 1;
+  // Active groups sorted by A-Z, Z-A or custom order
+  const activeGroups = React.useMemo(() => {
+    const list = Array.from(groupedMedicinesMap.values())
+      .filter(g => g.activeBatches.length > 0)
+      .filter(matchesFilter);
 
-      // When A-Z or Z-A is active, sort alphabetically by medicine name
+    return list.sort((a, b) => {
+      // 1. When A-Z or Z-A is active, sort alphabetically
       if (sortOrder === 'asc') {
         return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
       }
@@ -364,275 +736,73 @@ export const MedicineList: React.FC<MedicineListProps> = ({
         return (b.name || '').toLowerCase().localeCompare((a.name || '').toLowerCase());
       }
 
-      // Default: sort by nearest active expiration date
+      // 2. Custom Order is active (no filter choice like A-Z, Z-A)
+      if (customCardOrder && customCardOrder.length > 0) {
+        const idxA = customCardOrder.indexOf(a.groupKey);
+        const idxB = customCardOrder.indexOf(b.groupKey);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+      }
+
+      // 3. Fallback to medicine's customOrder field if present
+      if (a.customOrder !== undefined && b.customOrder !== undefined) {
+        return a.customOrder - b.customOrder;
+      }
+      if (a.customOrder !== undefined) return -1;
+      if (b.customOrder !== undefined) return 1;
+
+      // 4. Default fallback: sort by nearest active expiration date
       const diffA = a.nearestActiveBatch ? getDiffDays(a.nearestActiveBatch.expirationDate) : 9999;
       const diffB = b.nearestActiveBatch ? getDiffDays(b.nearestActiveBatch.expirationDate) : 9999;
       return diffA - diffB;
     });
+  }, [groupedMedicinesMap, selectedCategory, sortOrder, customCardOrder]);
 
-  const expiredGroups = Array.from(groupedMedicinesMap.values())
-    .filter(g => g.expiredOrEmptyBatches.length > 0)
-    .filter(matchesFilter)
-    .sort((a, b) => {
-      if (a.liked && !b.liked) return -1;
-      if (!a.liked && b.liked) return 1;
+  const expiredGroups = React.useMemo(() => {
+    return Array.from(groupedMedicinesMap.values())
+      .filter(g => g.expiredOrEmptyBatches.length > 0)
+      .filter(matchesFilter)
+      .sort((a, b) => {
+        if (sortOrder === 'desc') {
+          return (b.name || '').toLowerCase().localeCompare((a.name || '').toLowerCase());
+        }
+        return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+      });
+  }, [groupedMedicinesMap, selectedCategory, sortOrder]);
 
-      if (sortOrder === 'desc') {
-        return (b.name || '').toLowerCase().localeCompare((a.name || '').toLowerCase());
-      }
-      return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
-    });
+  // Handle reorder from drag & drop
+  const handleReorderActiveGroups = (newGroups: GroupedMedicine[]) => {
+    const newOrderKeys = newGroups.map(g => g.groupKey);
+    setCustomCardOrder(newOrderKeys);
+    try {
+      localStorage.setItem('dawasnap_custom_card_order', JSON.stringify(newOrderKeys));
+    } catch {}
+    if (onSaveCustomOrder) {
+      onSaveCustomOrder(newOrderKeys);
+    }
+  };
 
-  // Render an Active Group Card
-  const renderActiveGroupCard = (group: GroupedMedicine, index: number) => {
-    const nearestBatch = group.nearestActiveBatch;
-    const nearestExpiry = nearestBatch?.expirationDate;
-    const status = getExpiryStatus(nearestExpiry);
-    const diffDays = getDiffDays(nearestExpiry);
+  // Handle moving a card to a specific position (1, 2, 3, 4...)
+  const handleMovePosition = (groupKey: string, newPosition: number) => {
+    const currentKeys = activeGroups.map(g => g.groupKey);
+    const oldIndex = currentKeys.indexOf(groupKey);
+    if (oldIndex === -1) return;
 
-    const effectiveThreshold = alertThreshold === 90 ? 92 : alertThreshold;
-    const isExpiringSoon = diffDays >= 0 && diffDays <= 10;
-    const isExpiringAlert = diffDays > 10 && diffDays <= effectiveThreshold;
-    const isAlertEnabled = group.enableLowStockAlert !== false;
-    const threshold = group.lowStockThreshold ?? lowQuantityThreshold;
-    const isLowQuantity = isAlertEnabled && group.hasActiveQuantities && group.totalActiveQuantity <= threshold;
-    const needsAttention = isExpiringSoon || isExpiringAlert || isLowQuantity;
+    const clampedPos = Math.max(0, Math.min(newPosition, currentKeys.length - 1));
+    if (oldIndex === clampedPos) return;
 
-    const activeBatchIds = group.activeBatches.map(b => b.id);
-    const allActiveSelected = activeBatchIds.length > 0 && activeBatchIds.every(id => selectedIds.has(id));
-    const isExpanded = expandedGroupKeys.has(group.groupKey) || group.allBatches.length > 1;
+    const nextKeys = [...currentKeys];
+    const [moved] = nextKeys.splice(oldIndex, 1);
+    nextKeys.splice(clampedPos, 0, moved);
 
-    return (
-      <motion.div
-        layout
-        key={`active-group-${group.groupKey}`}
-        initial={{ opacity: 0, scale: 0.96, y: 15 }}
-        animate={{ 
-          opacity: 1, 
-          scale: 1, 
-          y: 0,
-          ...(needsAttention && !allActiveSelected ? {
-            boxShadow: isExpiringSoon 
-              ? ['0px 0px 0px rgba(249,115,22,0)', '0px 0px 15px rgba(249,115,22,0.15)', '0px 0px 0px rgba(249,115,22,0)']
-              : isExpiringAlert || isLowQuantity
-                ? ['0px 0px 0px rgba(234,179,8,0)', '0px 0px 15px rgba(234,179,8,0.15)', '0px 0px 0px rgba(234,179,8,0)']
-                : undefined,
-          } : {}),
-          transition: {
-            layout: { type: "spring", stiffness: 350, damping: 30 },
-            duration: 0.25
-          }
-        }}
-        exit={{ 
-          opacity: 0, 
-          scale: 0.94, 
-          y: -15,
-          transition: { duration: 0.2 }
-        }}
-        transition={{ 
-          delay: index * 0.03,
-          ...(needsAttention && !allActiveSelected ? {
-            boxShadow: { repeat: Infinity, duration: 2, ease: "easeInOut" }
-          } : {})
-        }}
-        className={`w-full text-left relative overflow-hidden border-2 rounded-3xl p-5 transition-all shadow-sm ${
-          allActiveSelected ? 'bg-white border-[#0f9d58] shadow-[0_12px_40px_rgba(15,157,88,0.06)]' :
-          isExpiringSoon ? 'bg-white border-orange-500 hover:border-orange-600 hover:bg-orange-50/20' :
-          isExpiringAlert ? 'bg-white border-purple-500 hover:border-purple-600 hover:bg-purple-50/20' :
-          isLowQuantity ? 'bg-white border-amber-500 hover:border-amber-600 hover:bg-amber-50/20' :
-          'bg-white border-blue-400 hover:border-blue-500 hover:bg-blue-50/20'
-        }`}
-        drag={isSelectionMode ? false : "x"}
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.22}
-        onDragEnd={(_, info) => {
-          if (info.offset.x > 75 && nearestBatch && nearestBatch.quantity !== undefined && nearestBatch.quantity > 0) {
-            triggerSuccessHaptic();
-            onReduceQuantity(nearestBatch);
-          } else if (info.offset.x < -75 && nearestBatch) {
-            triggerLightHaptic();
-            onEdit(nearestBatch);
-          }
-        }}
-      >
-        {/* Background Image if available */}
-        {group.imageUrl && (
-          <div className="absolute top-0 right-0 w-24 h-24 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
-            {group.imageUrl === 'local' && nearestBatch ? (
-              <LocalImage 
-                medicineId={nearestBatch.id} 
-                className="w-full h-full object-cover rounded-bl-3xl" 
-              />
-            ) : (
-              <img 
-                src={group.imageUrl} 
-                alt="" 
-                className="w-full h-full object-cover rounded-bl-3xl"
-                referrerPolicy="no-referrer"
-              />
-            )}
-          </div>
-        )}
-
-        {/* Card Header (Outside of the box) */}
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex items-start gap-2.5 flex-1 overflow-hidden">
-            {isSelectionMode && (
-              <button 
-                type="button"
-                onClick={() => toggleSelectGroup(group.activeBatches)}
-                className="mt-1 text-slate-400 shrink-0 hover:text-[#0f9d58] transition-colors"
-              >
-                {allActiveSelected ? <CheckSquare size={18} className="text-[#0f9d58]" /> : <Square size={18} />}
-              </button>
-            )}
-            
-            <div 
-              className="flex-1 min-w-0 cursor-pointer"
-              onClick={() => {
-                triggerLightHaptic();
-                if (isSelectionMode) {
-                  toggleSelectGroup(group.activeBatches);
-                } else if (nearestBatch) {
-                  onEdit(nearestBatch);
-                }
-              }}
-            >
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="font-bold text-base sm:text-lg tracking-tight text-[#1f1f1f] hover:text-[#0f9d58] transition-colors truncate">
-                  {group.name}
-                </h3>
-                <span className="shrink-0 scale-90 sm:scale-100">{group.form && MEDICINE_FORM_ICONS[group.form]}</span>
-                {group.activeBatches.length > 1 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
-                    <Layers size={10} />
-                    {group.activeBatches.length} Batches
-                  </span>
-                )}
-                {group.expiredOrEmptyBatches.length > 0 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
-                    <XCircle size={10} />
-                    {group.expiredOrEmptyBatches.length} Expired
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <span className="flex items-center gap-1 text-slate-500 text-[11px] sm:text-xs">
-                  <Package size={12} className="text-slate-400" />
-                  {group.dosage}
-                </span>
-                {group.schedule && (
-                  <span className="flex items-center gap-1 text-[#1a73e8] text-[11px] sm:text-xs font-semibold">
-                    <Clock size={12} className="text-[#1a73e8]" />
-                    <span className="truncate max-w-[120px]">{group.schedule}</span>
-                  </span>
-                )}
-                <span className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}>
-                  {status.label}
-                </span>
-              </div>
-
-              {/* Category Badges (Supports multiple categories e.g. Fever & Pain Relief) */}
-              {(() => {
-                const cats = Array.from(new Set(getMedicineCategories(group)));
-                if (cats.length === 0) return null;
-                return (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    {cats.map((cat, cIdx) => {
-                      const style = getCategoryStyle(cat);
-                      const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
-                      return (
-                        <span 
-                          key={`cat-${group.groupKey}-${cat.toLowerCase()}-${cIdx}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onSelectCategory) {
-                              onSelectCategory(isSelected ? 'ALL' : cat);
-                            }
-                          }}
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer hover:opacity-90 ${style.badgeBg} ${style.badgeText} ${style.badgeBorder} ${isSelected ? 'ring-1 ring-current' : ''}`}
-                          title={`Filter by category: ${cat}`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${style.dotColor}`} />
-                          {cat}
-                        </span>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-
-          {!isSelectionMode && (
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Like / Bookmark button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  triggerLightHaptic();
-                  if (nearestBatch && onToggleLike) {
-                    onToggleLike(nearestBatch);
-                  }
-                }}
-                className={`p-2 sm:p-2.5 rounded-full transition-all active:scale-90 border ${
-                  group.liked 
-                    ? 'bg-rose-50 text-rose-500 border-rose-100 hover:bg-rose-100' 
-                    : 'bg-[#faf8f5]/60 text-slate-400 border-[#e3e2e0] hover:text-slate-600 hover:bg-slate-100'
-                }`}
-                title={group.liked ? "Remove like" : "Like medication"}
-              >
-                <Heart size={16} fill={group.liked ? "#ef4444" : "none"} />
-              </button>
-
-              {/* Quick Reduce (-1) on nearest expiring batch */}
-              {nearestBatch && nearestBatch.quantity !== undefined && nearestBatch.quantity > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    triggerMediumHaptic();
-                    onReduceQuantity(nearestBatch);
-                  }}
-                  className="p-2 sm:p-2.5 bg-[#faf8f5]/60 border border-[#e3e2e0] rounded-full text-slate-500 hover:text-[#1f1f1f] hover:bg-slate-100 transition-all active:scale-90"
-                  title="Take / Reduce 1 from nearest expiring batch"
-                >
-                  <Minus size={16} />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Outside Information Bar: Nearest Expiration & Total Active Quantity */}
-        <div className={`flex items-center justify-between mt-2 pt-2 border-t border-slate-100 ${isSelectionMode ? 'ml-7' : ''}`}>
-          <div className="flex items-center gap-1.5 text-slate-600 text-[11px] font-mono font-semibold">
-            <Calendar size={13} className="text-slate-400" />
-            <span>
-              Nearest Expiry: <span className="font-bold text-[#1f1f1f]">{formatDisplayDate(nearestExpiry)}</span>
-            </span>
-          </div>
-
-          {group.hasActiveQuantities && (
-            <div className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg flex items-center gap-1 ${
-              isLowQuantity 
-                ? 'text-[#f2a154] bg-orange-50 border border-orange-100' 
-                : 'text-slate-700 bg-slate-100 border border-slate-200'
-            }`}>
-              {isLowQuantity && <AlertCircle size={10} className="text-orange-500" />}
-              <span>{group.totalActiveQuantity} LEFT</span>
-            </div>
-          )}
-        </div>
-
-        {/* Usage Instructions if present */}
-        {group.usageInstructions && (
-          <p className={`mt-2 text-slate-500 text-[10px] line-clamp-1 italic ${isSelectionMode ? 'ml-7' : ''}`}>
-            {group.usageInstructions}
-          </p>
-        )}
-      </motion.div>
-    );
+    setCustomCardOrder(nextKeys);
+    try {
+      localStorage.setItem('dawasnap_custom_card_order', JSON.stringify(nextKeys));
+    } catch {}
+    if (onSaveCustomOrder) {
+      onSaveCustomOrder(nextKeys);
+    }
   };
 
   // Render an Expired Group Card (Shown in Expired Section)
@@ -648,7 +818,7 @@ export const MedicineList: React.FC<MedicineListProps> = ({
         initial={{ opacity: 0, scale: 0.96, y: 15 }}
         animate={{ 
           opacity: 0.85, 
-          scale: 1,
+          scale: 1, 
           y: 0,
           transition: {
             layout: { type: "spring", stiffness: 350, damping: 30 },
@@ -709,7 +879,7 @@ export const MedicineList: React.FC<MedicineListProps> = ({
                 </span>
               </div>
 
-              {/* Category Badges (Supports multiple categories e.g. Fever & Pain Relief) */}
+              {/* Category Badges */}
               {(() => {
                 const cats = Array.from(new Set(getMedicineCategories(group)));
                 if (cats.length === 0) return null;
@@ -744,11 +914,12 @@ export const MedicineList: React.FC<MedicineListProps> = ({
           {!isSelectionMode && earliestBatch && (
             <div className="flex items-center gap-1.5 shrink-0">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit(earliestBatch);
                 }}
-                className="p-2 bg-slate-50 border border-slate-200 rounded-full text-slate-500 hover:text-slate-800 transition-all"
+                className="p-2 bg-slate-50 border border-slate-200 rounded-full text-slate-500 hover:text-slate-800 transition-all cursor-pointer"
                 title="Edit medicine"
               >
                 <Edit3 size={16} />
@@ -813,7 +984,7 @@ export const MedicineList: React.FC<MedicineListProps> = ({
   }
 
   return (
-    <div className="space-y-2 px-2 sm:px-4 pb-24">
+    <div className="space-y-3 px-2 sm:px-4 pb-24">
       {/* Top Selection Actions Toolbar (shown when selection mode is active) */}
       <AnimatePresence>
         {isSelectionMode && (
@@ -859,7 +1030,7 @@ export const MedicineList: React.FC<MedicineListProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Dr Jack Auto-Allot Banner: appears every time any medicine categories or formulations are not allotted */}
+      {/* Dr Jack Auto-Allot Banner */}
       {hasUnallocatedItems && (onAutoCategorize || onAutoAllotFormulations) && (
         <div className="mx-1 mb-3.5 p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-teal-50/80 to-emerald-50/90 border border-teal-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3.5 relative">
           <div className="flex items-start md:items-center gap-3 pr-2">
@@ -935,7 +1106,7 @@ export const MedicineList: React.FC<MedicineListProps> = ({
           <button
             type="button"
             onClick={() => onSelectCategory?.('ALL')}
-            className="mt-3 px-4 py-1.5 rounded-full bg-slate-900 text-white text-xs font-bold hover:bg-black transition-colors"
+            className="mt-3 px-4 py-1.5 rounded-full bg-slate-900 text-white text-xs font-bold hover:bg-black transition-colors cursor-pointer"
           >
             Show All Medicines
           </button>
@@ -944,17 +1115,43 @@ export const MedicineList: React.FC<MedicineListProps> = ({
 
       {/* Active & Safe Medications Section */}
       {activeGroups.length > 0 && (
-        <div className="flex items-center gap-2 mt-4 mb-2.5 px-2 select-none">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#0f9d58]" />
-          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-            Active & Safe ({activeGroups.length})
-          </span>
+        <div className="flex items-center justify-between mt-4 mb-2.5 px-2 select-none">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#0f9d58]" />
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+              Active & Safe ({activeGroups.length})
+            </span>
+          </div>
         </div>
       )}
 
-      <AnimatePresence mode="popLayout">
-        {activeGroups.map((group, index) => renderActiveGroupCard(group, index))}
-      </AnimatePresence>
+      {/* Drag & Drop Reorder Group for Active Cards */}
+      <Reorder.Group 
+        axis="y" 
+        values={activeGroups} 
+        onReorder={isCustomOrderActive ? handleReorderActiveGroups : () => {}}
+        className="space-y-3"
+      >
+        {activeGroups.map((group, index) => (
+          <ActiveGroupCard 
+            key={`active-group-${group.groupKey}`}
+            group={group}
+            index={index}
+            totalGroups={activeGroups.length}
+            isCustomOrderActive={isCustomOrderActive}
+            isSelectionMode={isSelectionMode}
+            selectedIds={selectedIds}
+            toggleSelectGroup={toggleSelectGroup}
+            onEdit={onEdit}
+            onReduceQuantity={onReduceQuantity}
+            lowQuantityThreshold={lowQuantityThreshold}
+            alertThreshold={alertThreshold}
+            selectedCategory={selectedCategory}
+            onSelectCategory={onSelectCategory}
+            onMovePosition={handleMovePosition}
+          />
+        ))}
+      </Reorder.Group>
 
       {/* Expired Medications Section */}
       {expiredGroups.length > 0 && (
@@ -997,13 +1194,13 @@ export const MedicineList: React.FC<MedicineListProps> = ({
               <div className="flex gap-3">
                 <button 
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-colors"
+                  className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={confirmDelete}
-                  className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-500/20"
+                  className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-500/20 cursor-pointer"
                 >
                   Delete
                 </button>

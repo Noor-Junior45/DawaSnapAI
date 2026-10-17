@@ -155,6 +155,13 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'expired' | 'expiring_soon' | 'expiring_3_months' | 'taken' | 'expiring_6_months'>('all');
   const [sortOrder, setSortOrder] = useState<'default' | 'asc' | 'desc'>('default');
+  const [customCardOrder, setCustomCardOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('dawasnap_custom_card_order');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const [alertThreshold, setAlertThreshold] = useState(90);
   const [lowQuantityThreshold, setLowQuantityThreshold] = useState(5);
   const [accentColor, setAccentColor] = useState('#f97316');
@@ -649,6 +656,12 @@ export default function App() {
         if (data.accentColor) setAccentColor(data.accentColor);
         if (data.emailNotificationsEnabled !== undefined) setEmailNotificationsEnabled(data.emailNotificationsEnabled);
         if (data.sortOrder) setSortOrder(data.sortOrder);
+        if (Array.isArray(data.customCardOrder)) {
+          setCustomCardOrder(data.customCardOrder);
+          try {
+            localStorage.setItem('dawasnap_custom_card_order', JSON.stringify(data.customCardOrder));
+          } catch {}
+        }
         if (data.theme) setTheme(data.theme);
       } else {
         const initialConfig = {
@@ -1570,6 +1583,37 @@ export default function App() {
     }
   };
 
+  const handleSaveCustomOrder = async (newOrder: string[]) => {
+    setCustomCardOrder(newOrder);
+    try {
+      localStorage.setItem('dawasnap_custom_card_order', JSON.stringify(newOrder));
+    } catch {}
+
+    if (!user) return;
+
+    // 1. Store in Firestore user appSettings & sync to Supabase
+    await handleUpdateConfig({ customCardOrder: newOrder });
+
+    // 2. Persist customOrder sequence (1, 2, 3, 4...) across medicine records in Firestore
+    try {
+      const batch = writeBatch(db);
+      let count = 0;
+      medicines.forEach(med => {
+        const groupKey = (med.name || '').trim().toLowerCase();
+        const orderIdx = newOrder.indexOf(groupKey);
+        if (orderIdx !== -1) {
+          batch.update(doc(db, 'medicines', med.id), { customOrder: orderIdx + 1 });
+          count++;
+        }
+      });
+      if (count > 0) {
+        await batch.commit();
+      }
+    } catch (e) {
+      console.warn('Batch update customOrder notice:', e);
+    }
+  };
+
   const handleCapture = async (base64: string, base64Back?: string) => {
     if (isProcessing) return;
     setIsProcessing(true);
@@ -1972,7 +2016,7 @@ export default function App() {
       const effectiveThreshold = alertThreshold === 90 ? 92 : alertThreshold;
 
       if (filter === 'expired') return diffDays < 0;
-      if (filter === 'expiring_soon') return diffDays >= 0 && diffDays <= 10;
+      if (filter === 'expiring_soon') return diffDays >= 0 && diffDays <= effectiveThreshold;
       if (filter === 'expiring_3_months') return diffDays >= 0 && diffDays <= effectiveThreshold;
       if (filter === 'expiring_6_months') return diffDays >= 0 && diffDays <= 180;
       
@@ -2765,7 +2809,19 @@ export default function App() {
 
         {/* Stats / Info */}
         <div className="px-4 mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-white border border-[#e3e2e0] rounded-2xl p-3.5 shadow-sm">
+          <div 
+            onClick={() => {
+              triggerLightHaptic();
+              setFilter('all');
+              setSelectedCategory('ALL');
+            }}
+            className={`bg-white border rounded-2xl p-3.5 shadow-sm cursor-pointer transition-all active:scale-95 ${
+              filter === 'all' && selectedCategory === 'ALL'
+                ? 'border-slate-800 ring-2 ring-slate-800/10 shadow-xs'
+                : 'border-[#e3e2e0] hover:border-slate-400'
+            }`}
+            title="Click to show all medications"
+          >
             <p className="text-slate-500 text-[10px] sm:text-[11px] uppercase tracking-wider font-extrabold mb-1">Total</p>
             <p className="text-xl sm:text-2xl font-black text-[#1f1f1f] tracking-tight">
               {medicines.filter(m => !m.isDeleted).length}
@@ -2777,8 +2833,24 @@ export default function App() {
               {new Set(medicines.filter(m => !m.isDeleted).map(m => (m.name || '').toLowerCase().trim())).size}
             </p>
           </div>
-          <div className="bg-white border border-[#e3e2e0] rounded-2xl p-3.5 shadow-sm">
-            <p className="text-slate-500 text-[10px] sm:text-[11px] uppercase tracking-wider font-extrabold mb-1">Expiring</p>
+          <div 
+            onClick={() => {
+              triggerLightHaptic();
+              setFilter(prev => prev === 'expiring_soon' ? 'all' : 'expiring_soon');
+            }}
+            className={`bg-white border rounded-2xl p-3.5 shadow-sm cursor-pointer transition-all active:scale-95 ${
+              filter === 'expiring_soon'
+                ? 'border-[#f2a154] ring-2 ring-[#f2a154]/20 shadow-xs'
+                : 'border-[#e3e2e0] hover:border-[#f2a154]/60'
+            }`}
+            title="Click to filter medications expiring soon"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-slate-500 text-[10px] sm:text-[11px] uppercase tracking-wider font-extrabold">Expiring</p>
+              <span className="text-[9px] font-bold text-[#f2a154] bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-100">
+                {alertThreshold === 90 ? '≤ 3mo' : `≤ ${alertThreshold}d`}
+              </span>
+            </div>
             <p className="text-xl sm:text-2xl font-black text-[#f2a154] tracking-tight">
               {medicines.filter(m => {
                 if (m.isDeleted || m.taken || !m.expirationDate) return false;
@@ -2788,7 +2860,18 @@ export default function App() {
               }).length}
             </p>
           </div>
-          <div className="bg-white border border-[#e3e2e0] rounded-2xl p-3.5 shadow-sm">
+          <div 
+            onClick={() => {
+              triggerLightHaptic();
+              setFilter(prev => prev === 'taken' ? 'all' : 'taken');
+            }}
+            className={`bg-white border rounded-2xl p-3.5 shadow-sm cursor-pointer transition-all active:scale-95 ${
+              filter === 'taken'
+                ? 'border-[#0f9d58] ring-2 ring-[#0f9d58]/20 shadow-xs'
+                : 'border-[#e3e2e0] hover:border-[#0f9d58]/60'
+            }`}
+            title="Click to filter taken/finished medications"
+          >
             <p className="text-slate-500 text-[10px] sm:text-[11px] uppercase tracking-wider font-extrabold mb-1">Taken</p>
             <p className="text-xl sm:text-2xl font-black text-[#0f9d58] tracking-tight">
               {medicines.filter(m => !m.isDeleted && m.taken).length}
@@ -2846,8 +2929,8 @@ export default function App() {
               setSortOrder(nextOrder);
               handleUpdateConfig({ sortOrder: nextOrder });
             }}
-            title={sortOrder === 'asc' ? 'Sorted A to Z (Click for Z to A)' : sortOrder === 'desc' ? 'Sorted Z to A (Click for Expiration Order)' : 'Sort A to Z'}
-            aria-label={sortOrder === 'asc' ? 'Sorted A to Z' : sortOrder === 'desc' ? 'Sorted Z to A' : 'Sort A to Z'}
+            title={sortOrder === 'asc' ? 'Sorted A to Z (Click for Z to A)' : sortOrder === 'desc' ? 'Sorted Z to A (Click for Custom Drag Order)' : 'Custom Drag Order (Click for A-Z)'}
+            aria-label={sortOrder === 'asc' ? 'Sorted A to Z' : sortOrder === 'desc' ? 'Sorted Z to A' : 'Custom Drag Order'}
             className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wide border transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
               sortOrder !== 'default' 
                 ? 'bg-[#0f9d58] text-white border-transparent shadow-xs' 
@@ -2861,7 +2944,7 @@ export default function App() {
             ) : (
               <ArrowUpDown size={12} className="shrink-0 text-slate-400" />
             )}
-            <span>{sortOrder === 'desc' ? 'Z-A' : 'A-Z'}</span>
+            <span>{sortOrder === 'desc' ? 'Z-A' : sortOrder === 'asc' ? 'A-Z' : 'Custom'}</span>
           </button>
           <div className="w-px h-4 sm:h-5 bg-[#e3e2e0] mx-0.5 sm:mx-1 self-center shrink-0"></div>
 
@@ -2976,13 +3059,14 @@ export default function App() {
         <MedicineList 
           medicines={filteredMedicines} 
           sortOrder={sortOrder}
+          customCardOrder={customCardOrder}
+          onSaveCustomOrder={handleSaveCustomOrder}
           onEdit={handleEdit} 
           onToggleTaken={handleToggleTaken}
           onReduceQuantity={handleReduceQuantity}
           onDeleteMultiple={handleDeleteMultiple}
           lowQuantityThreshold={lowQuantityThreshold}
           alertThreshold={alertThreshold}
-          onToggleLike={handleToggleLike}
           onAutoCategorize={handleAutoCategorize}
           isCategorizing={isCategorizing}
           onAutoAllotFormulations={handleAutoAllotFormulations}

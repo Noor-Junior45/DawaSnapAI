@@ -354,8 +354,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Mail size={16} />
                 </div>
                 <div>
-                  <span className="text-[12px] font-bold text-[#1f1f1f] block leading-none group-hover:text-[#ea4335] transition-colors">Treatment Mailbox</span>
-                  <span className="text-[10px] text-[#5f6368] block mt-1">Secure emails & reports</span>
+                  <span className="text-[12px] font-bold text-[#1f1f1f] block leading-none group-hover:text-[#ea4335] transition-colors">Mailbox</span>
                 </div>
               </div>
             </button>
