@@ -114,15 +114,42 @@ function sanitizeExtractedMedicine(
     usageInstructions = '';
   }
 
-  const validForms = ["tablet", "capsule", "syrup", "ampule", "powder", "tape", "liquid", "other"];
-  let form = sanitizeStr(raw?.form, 'tablet').toLowerCase();
+  const validForms = [
+    "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
+    "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
+    "powder", "sachet", "suspension", "tape", "liquid", "oil", "other"
+  ];
+  let form = sanitizeStr(raw?.form, '').toLowerCase();
+
+  const combinedContext = `${name} ${ocrText || ''} ${usageInstructions} ${dosage}`.toLowerCase();
+
+  // 1. Powder priority check: Never allow powder to be classified as tablet or syrup
+  if (/powder|dusting|granule|effervescent|ors\b|electral|eno\b|abzorb|nycil|dermicool/i.test(combinedContext)) {
+    form = /sachet/i.test(combinedContext) ? 'sachet' : 'powder';
+  }
+  // 2. Oil priority check: Never allow oil to be classified as tablet or generic liquid
+  else if (/(\boil\b|tail\b|taila\b|roghan\b|liniment\b|massage\s*oil|hair\s*oil|clove\s*oil|castor\s*oil|pain\s*relief\s*oil)/i.test(combinedContext)) {
+    form = 'oil';
+  }
+  // 3. Syrup / Suspension priority check: Drinkable medical liquids are syrups/suspensions, never generic 'liquid' or 'tablet'
+  else if (
+    /syrup|suspension|oral\s*liquid|cough|expectorant|linctus|elixir|pediatric\s*drops/i.test(combinedContext) ||
+    (form === 'liquid' && /oral|drink|spoon|bottle|cough|cold|antacid|gelusil|digene|calpol|benadryl|ascoril/i.test(combinedContext))
+  ) {
+    form = /suspension|susp\b/i.test(combinedContext) ? 'suspension' : 'syrup';
+  }
+  // 4. If form is still 'liquid' and bottle/oral use is mentioned, map to syrup
+  else if (form === 'liquid' && /oral|drink|spoon|ml\b/i.test(combinedContext)) {
+    form = 'syrup';
+  }
+
   if (!validForms.includes(form)) {
     form = 'tablet';
   }
 
   let quantity = Number(raw?.quantity);
   if (isNaN(quantity) || quantity <= 0) {
-    quantity = hints?.potentialQuantity || 1;
+    quantity = hints?.potentialQuantity || (form === 'syrup' || form === 'oil' ? 1 : 10);
   }
 
   let rawCategory = sanitizeStr(raw?.category, '');
@@ -147,6 +174,34 @@ function sanitizeExtractedMedicine(
   ) {
     if (!categories.includes('Fever')) categories.push('Fever');
     if (!categories.includes('Pain Relief')) categories.push('Pain Relief');
+  }
+
+  // Automatic Oil category allotment
+  if (form === 'oil' || /oil\b|tail\b|taila\b|roghan\b|liniment/i.test(combinedContext)) {
+    if (!categories.includes('Oil')) categories.push('Oil');
+    if (/pain|joint|muscle|rheuma|liniment/i.test(combinedContext) && !categories.includes('Pain Relief')) {
+      categories.push('Pain Relief');
+    }
+  }
+
+  // Automatic Powder category allotment
+  if (form === 'powder' || form === 'sachet') {
+    if (/ors\b|electral|eno\b|digest/i.test(combinedContext) && !categories.includes('Digestive')) {
+      categories.push('Digestive');
+    }
+    if (/dusting|candid|abzorb|nycil|dermicool|fungal|skin/i.test(combinedContext) && !categories.includes('Skin Care')) {
+      categories.push('Skin Care');
+    }
+  }
+
+  // Automatic Syrup category allotment
+  if (form === 'syrup' || form === 'suspension') {
+    if (/cough|cold|bronch|ascoril|benadryl|chest/i.test(combinedContext) && !categories.includes('Respiratory')) {
+      categories.push('Respiratory');
+    }
+    if (/antacid|digene|gelusil|acid|reflux/i.test(combinedContext) && !categories.includes('Digestive')) {
+      categories.push('Digestive');
+    }
   }
 
   if (categories.length === 0 && rawCategory) {
@@ -433,18 +488,25 @@ FIELD-BY-FIELD INSTRUCTIONS:
    - Do NOT confuse manufacturing date (MFG / B.No) with expiry date (EXP).
 
 4. "form":
-   - Identify the exact formulation: "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", or "other".
+   - Use Google Search knowledge and pharmaceutical product specifications to identify the exact formulation:
+     * "powder": Oral rehydration powders, effervescent granules, dusting powders, powder sachets, nutritional powders (e.g. Electral, ORS, Eno, Candid Dusting Powder, Nycil, Dermicool, Abzorb). If packaging is a sachet, packet, or canister of powder/granules, select "powder" (or "sachet"). NEVER classify powders as "tablet" or "syrup"!
+     * "syrup": Oral liquid suspensions, cough syrups, pediatric drops, liquid antacids (e.g. Benadryl, Ascoril, Gelusil, Cremaffin, Calpol syrup/suspension, Zedex, Grilinctus, Corex). If it is a drinkable medicinal liquid in a bottle, ALWAYS select "syrup" (or "suspension"). NEVER classify syrups as generic "liquid"!
+     * "oil": Medicated oils, herbal/ayurvedic oils, pain relief massage oils, hair/scalp oils, ear oils, liniments (e.g. Roghan Badam, Jaitun Tel, Clove Oil, Castor Oil, Mahabhringraj, Mahanarayan Taila, Pain Relief Liniment/Oil). If the packaging or name contains oil, tail, taila, roghan, or liniment, ALWAYS select "oil".
+     * Other valid forms: "tablet", "capsule", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "oil", or "other".
 
 5. "quantity":
    - Look for pack size (e.g., "10 Tablets", "15 Capsules", "Strip of 10", "100ml").
-   - Default to 10 for standard blister strips or 1 for bottles/syrups if not specified.
+   - Default to 10 for standard blister strips or 1 for bottles/syrups/oils if not specified.
 
 6. "usageInstructions":
    - Extract clinical guidance if printed (e.g., "As directed by physician", "Take after food", "Store below 25°C protected from moisture").
 
 7. "categories":
-   - Classify this medicine into all applicable clinical categories as a JSON array of strings from: "Fever", "Pain Relief", "Heart", "Vitamins", "Antibiotics", "Diabetes", "Digestive", "Allergy", "Respiratory", "Mental Health", "Skin Care", "Eye & Ear", or "Other".
+   - Classify this medicine into all applicable clinical categories as a JSON array of strings from: "Fever", "Pain Relief", "Heart", "Vitamins", "Antibiotics", "Diabetes", "Digestive", "Allergy", "Respiratory", "Mental Health", "Skin Care", "Eye & Ear", "Oil", or "Other".
    - CRITICAL: For combination medications or dual-indication drugs (e.g. Zerodol-P, Dolo 650, Combiflam, Crocin, Calpol, Paracetamol + Aceclofenac), assign BOTH ["Fever", "Pain Relief"].
+   - For Medicated Oils or pain relief oils, assign ["Oil", "Pain Relief"].
+   - For ORS, Electral, Eno, assign ["Digestive"].
+   - For Dusting Powders (Candid, Abzorb), assign ["Skin Care"].
 
 8. "category":
    - Provide a comma-separated string of the assigned categories (e.g. "Fever, Pain Relief" or "Antibiotics").
@@ -467,7 +529,7 @@ FIELD-BY-FIELD INSTRUCTIONS:
       console.log(`[GEMINI EXTRACT] Performing Multimodal Vision extraction (imagesCount: ${allImages.length}, ocrChars: ${ocrText?.length || 0})`);
 
       const response = await generateContentWithModelFallback(ai, {
-        preferredModel: "gemini-2.5-flash",
+        preferredModel: "gemini-3.8-flash",
         contents: contentsPayload,
         config: {
           responseMimeType: "application/json",
@@ -482,7 +544,7 @@ FIELD-BY-FIELD INSTRUCTIONS:
                 enum: [
                   "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
                   "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
-                  "powder", "sachet", "suspension", "tape", "liquid", "other"
+                  "powder", "sachet", "suspension", "tape", "liquid", "oil", "other"
                 ] 
               },
               categories: {
@@ -567,11 +629,12 @@ For each of the following medicines:
    - "suspension": Oral suspensions, pediatric suspensions, antacid suspensions
    - "tape": Transdermal patches, medical tape, medicinal plasters
    - "liquid": Topical liquids, mouthwashes, gargles, antiseptic washes, oral solutions
+   - "oil": Medicated oils, ayurvedic oils, pain relief massage oils, herbal taila/roghan, liniments
    - "other": Only if none of the above match.
    If the existing form is already provided and correct, keep it. If it is missing, empty, or 'other', allot the true dosage form.
 
 2. Assign all accurate clinical categories:
-   - categories: Array of matching categories from: "Fever", "Pain Relief", "Heart", "Vitamins", "Antibiotics", "Diabetes", "Digestive", "Allergy", "Respiratory", "Mental Health", "Skin Care", "Eye & Ear", "Other".
+   - categories: Array of matching categories from: "Fever", "Pain Relief", "Heart", "Vitamins", "Antibiotics", "Diabetes", "Digestive", "Allergy", "Respiratory", "Mental Health", "Skin Care", "Eye & Ear", "Oil", "Other".
    - CRITICAL DUAL INDICATION RULE: If the medication is a combination drug or dual therapeutic agent (e.g. Zerodol-P, Dolo 650, Combiflam, Crocin, Calpol, Paracetamol + Aceclofenac), assign BOTH ["Fever", "Pain Relief"].
    - category: Comma-separated string of the categories (e.g. "Fever, Pain Relief" or "Antibiotics").
 
@@ -590,7 +653,7 @@ Return a JSON array of objects with schema:
     "id": string (the exact id passed in),
     "category": string (e.g. "Fever, Pain Relief"),
     "categories": string[] (e.g. ["Fever", "Pain Relief"]),
-    "form": string (must be one of: "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "other")
+    "form": string (must be one of: "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "oil", "other")
   }
 ]`;
 
@@ -615,7 +678,7 @@ Return a JSON array of objects with schema:
                   enum: [
                     "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
                     "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
-                    "powder", "sachet", "suspension", "tape", "liquid", "other"
+                    "powder", "sachet", "suspension", "tape", "liquid", "oil", "other"
                   ]
                 }
               },
@@ -774,11 +837,12 @@ Analyze the brand name, active salt composition, dosage/strength, and clinical i
 - "inhaler": Metered dose inhalers (MDI), dry powder inhalers (DPI), rotahalers, respules
 - "injection": Injectable vials, IV/IM infusions, prefilled syringes
 - "ampule": Single-dose sterile glass ampules
-- "powder": Dusting powders, ORS rehydration powder, dry antibiotic powder
+- "powder": Dusting powders, ORS rehydration powder, dry antibiotic powder, effervescent granules
 - "sachet": Powder/granule sachets, effervescent drink sachets (e.g. Eno)
 - "suspension": Antacid oral suspensions, pediatric suspensions
 - "tape": Transdermal patches, medicated tape/plaster
 - "liquid": Antiseptic liquids (e.g. Dettol, Betadine), mouthwash, oral solutions
+- "oil": Medicated oils, ayurvedic oils, pain relief massage oils, herbal taila/roghan, liniments
 - "other": Only if none of the above medical store formulations fit.
 
 Medicines to allot:
@@ -794,14 +858,14 @@ Return a JSON array of objects:
 [
   {
     "id": string,
-    "form": string (must be one of: "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "other"),
+    "form": string (must be one of: "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "oil", "other"),
     "confidence": number (between 0.0 and 1.0),
     "explanation": string (short justification, max 100 chars, e.g. "Identified topical antifungal cream formulation")
   }
 ]`;
 
       const response = await generateContentWithModelFallback(ai, {
-        preferredModel: "gemini-2.5-flash",
+        preferredModel: "gemini-3.8-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -816,7 +880,7 @@ Return a JSON array of objects:
                   enum: [
                     "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
                     "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
-                    "powder", "sachet", "suspension", "tape", "liquid", "other"
+                    "powder", "sachet", "suspension", "tape", "liquid", "oil", "other"
                   ]
                 },
                 confidence: { type: Type.NUMBER },
@@ -876,23 +940,26 @@ Return a JSON array of objects:
       } else if (/ampul|ampule|vial/i.test(lower)) {
         form = 'ampule';
         explanation = 'Identified sterile ampule/vial';
-      } else if (/sachet|granule/i.test(lower)) {
-        form = 'sachet';
-        explanation = 'Identified medicinal sachet packet';
+      } else if (/powder|dusting|granule|effervescent|ors\b|electral|eno\b|abzorb|nycil|dermicool/i.test(lower)) {
+        form = /sachet/i.test(lower) ? 'sachet' : 'powder';
+        explanation = 'Identified medicinal powder formulation';
+      } else if (/oil\b|tail\b|taila\b|roghan\b|liniment\b|massage\s*oil|hair\s*oil|clove\s*oil|castor\s*oil/i.test(lower)) {
+        form = 'oil';
+        explanation = 'Identified medicated oil / liniment formulation';
+      } else if (/syrup|cough\s*syrup|elixir|linctus|oral\s*liquid/i.test(lower)) {
+        form = 'syrup';
+        explanation = 'Identified liquid syrup formulation';
       } else if (/suspension|oral\s*susp/i.test(lower)) {
         form = 'suspension';
         explanation = 'Identified oral liquid suspension';
-      } else if (/syrup|cough\s*syrup|elixir/i.test(lower)) {
-        form = 'syrup';
-        explanation = 'Identified liquid syrup formulation';
-      } else if (/powder|ors\b/i.test(lower)) {
-        form = 'powder';
-        explanation = 'Identified oral powder formulation';
+      } else if (/sachet/i.test(lower)) {
+        form = 'sachet';
+        explanation = 'Identified medicinal sachet packet';
       } else if (/patch|tape|plaster/i.test(lower)) {
         form = 'tape';
         explanation = 'Identified transdermal patch/tape';
       } else if (/liquid|solution|wash|gargle/i.test(lower)) {
-        form = 'liquid';
+        form = /oral|cough|cold|antacid|pediatric/i.test(lower) ? 'syrup' : 'liquid';
         explanation = 'Identified liquid solution formulation';
       }
       return {

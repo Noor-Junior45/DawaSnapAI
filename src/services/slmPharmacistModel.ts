@@ -1487,25 +1487,46 @@ export function extractMedicineOfflineSlm(
   // Capitalize properly
   name = name.charAt(0).toUpperCase() + name.slice(1);
 
-  // Form detection: combine CNN visual features with knowledge base
+  // Form detection: combine OCR patterns, CNN visual features, and knowledge base
   let form: MedicineForm = cnnFeatures?.form || matchedDrug?.defaultForm || 'tablet';
-  if (/capsule|cap\b/i.test(cleanOcr)) form = 'capsule';
-  else if (/cream|crème/i.test(cleanOcr)) form = 'cream';
-  else if (/lotion/i.test(cleanOcr)) form = 'lotion';
-  else if (/soap|bar\b|cleanser/i.test(cleanOcr)) form = 'soap';
-  else if (/ointment|unguentum/i.test(cleanOcr)) form = 'ointment';
-  else if (/gel\b|emulgel/i.test(cleanOcr)) form = 'gel';
-  else if (/drops?|eye\s*drops?|ear\s*drops?|nasal\s*drops?/i.test(cleanOcr)) form = 'drops';
-  else if (/inhaler|rotahaler|inhalation|respule/i.test(cleanOcr)) form = 'inhaler';
-  else if (/spray/i.test(cleanOcr)) form = 'spray';
-  else if (/injection|inj\b|infusion/i.test(cleanOcr)) form = 'injection';
-  else if (/ampule|ampul|vial/i.test(cleanOcr)) form = 'ampule';
-  else if (/sachet/i.test(cleanOcr)) form = 'sachet';
-  else if (/suspension/i.test(cleanOcr)) form = 'suspension';
-  else if (/syrup|oral\s*solution|elixir/i.test(cleanOcr)) form = 'syrup';
-  else if (/powder|ors\b/i.test(cleanOcr)) form = 'powder';
-  else if (/tape|patch|plaster/i.test(cleanOcr)) form = 'tape';
-  else if (/liquid|solution/i.test(cleanOcr)) form = 'liquid';
+  
+  // High-priority formulation checks
+  if (/powder|dusting|granule|effervescent|ors\b|electral|eno\b|abzorb|nycil|dermicool/i.test(cleanOcr)) {
+    form = /sachet/i.test(cleanOcr) ? 'sachet' : 'powder';
+  } else if (/oil\b|tail\b|taila\b|roghan\b|liniment\b|massage\s*oil|hair\s*oil|clove\s*oil|castor\s*oil/i.test(cleanOcr)) {
+    form = 'oil';
+  } else if (/syrup|suspension|oral\s*solution|oral\s*susp|cough|expectorant|elixir|linctus|pediatric\s*drops/i.test(cleanOcr)) {
+    form = /suspension|susp\b/i.test(cleanOcr) ? 'suspension' : 'syrup';
+  } else if (/sachet/i.test(cleanOcr)) {
+    form = 'sachet';
+  } else if (/capsule|cap\b|softgel/i.test(cleanOcr)) {
+    form = 'capsule';
+  } else if (/cream|crème/i.test(cleanOcr)) {
+    form = 'cream';
+  } else if (/lotion/i.test(cleanOcr)) {
+    form = 'lotion';
+  } else if (/soap|bar\b|cleanser/i.test(cleanOcr)) {
+    form = 'soap';
+  } else if (/ointment|unguentum/i.test(cleanOcr)) {
+    form = 'ointment';
+  } else if (/gel\b|emulgel/i.test(cleanOcr)) {
+    form = 'gel';
+  } else if (/drops?|eye\s*drops?|ear\s*drops?|nasal\s*drops?/i.test(cleanOcr)) {
+    form = 'drops';
+  } else if (/inhaler|rotahaler|inhalation|respule/i.test(cleanOcr)) {
+    form = 'inhaler';
+  } else if (/spray/i.test(cleanOcr)) {
+    form = 'spray';
+  } else if (/injection|inj\b|infusion/i.test(cleanOcr)) {
+    form = 'injection';
+  } else if (/ampule|ampul|vial/i.test(cleanOcr)) {
+    form = 'ampule';
+  } else if (/tape|patch|plaster/i.test(cleanOcr)) {
+    form = 'tape';
+  } else if (/liquid|solution/i.test(cleanOcr)) {
+    // If it's oral or drinkable, it's syrup, else liquid
+    form = /oral|cough|cold|antacid|pediatric/i.test(cleanOcr) ? 'syrup' : 'liquid';
+  }
 
   // Dosage resolution
   let dosage = hints?.potentialDosage;
@@ -1528,12 +1549,21 @@ export function extractMedicineOfflineSlm(
   }
 
   // Quantity resolution from CNN blister cell count or hints
-  const quantity = hints?.potentialQuantity || cnnFeatures?.estimatedUnitCount || (form === 'syrup' ? 1 : 10);
+  const quantity = hints?.potentialQuantity || cnnFeatures?.estimatedUnitCount || (form === 'syrup' || form === 'oil' ? 1 : 10);
 
   // Usage instructions and schedule
   const usageInstructions = matchedDrug ? matchedDrug.usageInstructions : 'Take as directed on packaging or by physician.';
   const schedule = matchedDrug ? matchedDrug.timing : 'After Meals';
-  const category = matchedDrug ? matchedDrug.category : (form === 'syrup' ? 'Respiratory' : 'Pain Relief');
+  
+  let defaultCategory = 'Pain Relief';
+  if (form === 'syrup' || form === 'suspension') {
+    defaultCategory = 'Respiratory';
+  } else if (form === 'powder' || form === 'sachet') {
+    defaultCategory = /dusting|candid|dermicool/i.test(cleanOcr) ? 'Skin Care' : 'Digestive';
+  } else if (form === 'oil') {
+    defaultCategory = /hair|skin/i.test(cleanOcr) ? 'Skin Care' : 'Pain Relief';
+  }
+  const category = matchedDrug ? matchedDrug.category : defaultCategory;
   const tags = matchedDrug ? matchedDrug.tags : ['Scanned', form];
 
   return {

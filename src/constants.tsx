@@ -39,6 +39,7 @@ export const MEDICINE_FORM_ICONS: Record<MedicineForm, React.ReactNode> = {
   suspension: <FlaskRound size={16} className="text-lime-600" />,
   tape: <Bandage size={16} className="text-pink-400" />,
   liquid: <Droplets size={16} className="text-blue-400" />,
+  oil: <Droplet size={16} className="text-amber-600" />,
   other: <HelpCircle size={16} className="text-slate-400" />,
 };
 
@@ -61,6 +62,7 @@ export const MEDICINE_FORM_LABELS: Record<MedicineForm, string> = {
   suspension: 'Suspension',
   tape: 'Tape / Patch',
   liquid: 'Liquid',
+  oil: 'Oil',
   other: 'Other',
 };
 
@@ -82,6 +84,7 @@ export const MEDICINE_CATEGORIES = [
   'Neurological',
   'General Care',
   'Supplements',
+  'Oil',
   'Other'
 ] as const;
 
@@ -233,6 +236,14 @@ export const CATEGORY_STYLES: Record<string, CategoryStyle> = {
     dotColor: 'bg-lime-500',
     accent: '#84cc16'
   },
+  'Oil': {
+    label: 'Oil',
+    badgeBg: 'bg-amber-50',
+    badgeText: 'text-amber-800',
+    badgeBorder: 'border-amber-300',
+    dotColor: 'bg-amber-600',
+    accent: '#d97706'
+  },
   'Other': {
     label: 'Other',
     badgeBg: 'bg-slate-100',
@@ -342,6 +353,9 @@ export const CATEGORY_SYNONYMS: Record<string, string[]> = {
   ],
   'Supplements': [
     'supplements', 'supplement', 'protein', 'calcium supplement', 'iron supplement', 'omega 3', 'fish oil', 'whey'
+  ],
+  'Oil': [
+    'oil', 'oils', 'medicated oil', 'essential oil', 'massage oil', 'pain relief oil', 'taila', 'tail', 'roghan', 'ayurvedic oil', 'hair oil', 'liniment'
   ]
 };
 

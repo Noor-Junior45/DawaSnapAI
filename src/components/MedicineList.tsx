@@ -8,6 +8,7 @@ import {
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { MEDICINE_FORM_ICONS, getCategoryStyle, isCategoryMatch, getMedicineCategories } from '../constants';
 import { triggerLightHaptic, triggerMediumHaptic, triggerSelectionHaptic, triggerSuccessHaptic } from '../utils/haptics';
+import { AdMobNativeCard } from './AdMobNativeCard';
 
 interface MedicineListProps {
   medicines: Medicine[];
@@ -201,6 +202,7 @@ const ActiveGroupCard: React.FC<ActiveGroupCardProps> = ({
   const dragControls = useDragControls();
   const [showOrderMenu, setShowOrderMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { brandName, genericName } = React.useMemo(() => parseMedicineName(group.name), [group.name]);
 
   useEffect(() => {
     if (!showOrderMenu) return;
@@ -282,10 +284,10 @@ const ActiveGroupCard: React.FC<ActiveGroupCardProps> = ({
               }
             }}
           >
-            {/* Title Line: 5-dot design handle + position indicator + medicine name */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {/* 5-dot design drag handle button right in front of medicine name */}
-              <div className="relative inline-flex items-center" ref={menuRef}>
+            {/* Title Line: Hexagonal dot design handle + clear medicine name in ONE line */}
+            <div className="flex items-center gap-1.5 min-w-0 w-full">
+              {/* Hexagonal dot design drag handle button right in front of medicine name (shrink-0 so never wraps) */}
+              <div className="relative inline-flex items-center shrink-0" ref={menuRef}>
                 <button
                   type="button"
                   onPointerDown={(e) => {
@@ -302,7 +304,7 @@ const ActiveGroupCard: React.FC<ActiveGroupCardProps> = ({
                       setShowOrderMenu(prev => !prev);
                     }
                   }}
-                  className={`p-1 -ml-1 sm:p-1.5 rounded-lg text-slate-400 hover:text-slate-800 active:text-blue-600 transition-colors touch-none select-none flex items-center justify-center ${
+                  className={`p-1 -ml-1 sm:p-1.5 rounded-lg text-slate-400 hover:text-slate-800 active:text-blue-600 transition-colors touch-none select-none flex items-center justify-center shrink-0 ${
                     isCustomOrderActive ? 'cursor-grab active:cursor-grabbing hover:bg-slate-100' : 'opacity-40 cursor-not-allowed'
                   }`}
                   title={isCustomOrderActive ? "Hold & drag handle up or down to reorder, or click for quick move" : "Custom drag ordering is available when no A-Z / Z-A filter is selected"}
@@ -376,23 +378,37 @@ const ActiveGroupCard: React.FC<ActiveGroupCardProps> = ({
                 )}
               </div>
 
-              <h3 className="font-bold text-base sm:text-lg tracking-tight text-[#1f1f1f] hover:text-[#0f9d58] transition-colors truncate">
-                {group.name}
+              {/* Medicine Name: clean, bold, locked in ONE line with dot handle, ellipses (...) if long */}
+              <h3 
+                className="font-bold text-base sm:text-lg tracking-tight text-[#1f1f1f] hover:text-[#0f9d58] transition-colors truncate min-w-0 shrink leading-snug"
+                title={group.name}
+              >
+                {brandName}
               </h3>
               <span className="shrink-0 scale-90 sm:scale-100">{group.form && MEDICINE_FORM_ICONS[group.form]}</span>
               {group.activeBatches.length > 1 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
+                <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100 whitespace-nowrap">
                   <Layers size={10} />
-                  {group.activeBatches.length} Batches
+                  <span>{group.activeBatches.length}</span>
                 </span>
               )}
               {group.expiredOrEmptyBatches.length > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">
                   <XCircle size={10} />
-                  {group.expiredOrEmptyBatches.length} Expired
+                  <span>{group.expiredOrEmptyBatches.length} Exp</span>
                 </span>
               )}
             </div>
+
+            {/* Clean secondary subtext for generic composition / formula if combined */}
+            {genericName && (
+              <p 
+                className="text-[11px] text-slate-500 truncate mt-0.5 pl-5.5 font-medium leading-tight" 
+                title={genericName}
+              >
+                {genericName}
+              </p>
+            )}
 
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <span className="flex items-center gap-1 text-slate-500 text-[11px] sm:text-xs">
@@ -810,6 +826,7 @@ export const MedicineList: React.FC<MedicineListProps> = ({
     const earliestBatch = group.earliestExpiredBatch || group.expiredOrEmptyBatches[0];
     const groupBatchIds = group.expiredOrEmptyBatches.map(b => b.id);
     const allGroupSelected = groupBatchIds.length > 0 && groupBatchIds.every(id => selectedIds.has(id));
+    const { brandName, genericName } = parseMedicineName(group.name);
 
     return (
       <motion.div
@@ -858,16 +875,24 @@ export const MedicineList: React.FC<MedicineListProps> = ({
                 }
               }}
             >
-              <h3 className="font-bold text-base sm:text-lg tracking-tight text-slate-600 flex items-center gap-1.5 truncate">
-                <span className="line-through">{group.name}</span>
+              <div className="flex items-center gap-1.5 min-w-0 w-full">
+                <h3 className="font-bold text-base sm:text-lg tracking-tight text-slate-600 truncate min-w-0 shrink leading-snug" title={group.name}>
+                  <span className="line-through">{brandName}</span>
+                </h3>
                 <span className="shrink-0 scale-90 sm:scale-100">{group.form && MEDICINE_FORM_ICONS[group.form]}</span>
                 {group.expiredOrEmptyBatches.length > 1 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                  <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">
                     <Layers size={10} />
-                    {group.expiredOrEmptyBatches.length} Expired Batches
+                    <span>{group.expiredOrEmptyBatches.length} Expired</span>
                   </span>
                 )}
-              </h3>
+              </div>
+
+              {genericName && (
+                <p className="text-[11px] text-slate-400 truncate mt-0.5 font-medium leading-tight" title={genericName}>
+                  {genericName}
+                </p>
+              )}
 
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="flex items-center gap-1 text-slate-500 text-[11px] sm:text-xs">
@@ -1152,6 +1177,11 @@ export const MedicineList: React.FC<MedicineListProps> = ({
           />
         ))}
       </Reorder.Group>
+
+      {/* AdMob Native Section Divider Ad Unit: DawaSnap_ExpiredSection_Native (ca-app-pub-5865716270182311/6125203379) */}
+      {expiredGroups.length > 0 && (
+        <AdMobNativeCard adUnitId="ca-app-pub-5865716270182311/6125203379" />
+      )}
 
       {/* Expired Medications Section */}
       {expiredGroups.length > 0 && (

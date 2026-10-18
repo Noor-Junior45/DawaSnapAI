@@ -251,16 +251,20 @@ ${hints?.potentialExpiry ? `Local candidate expiry date: ${hints.potentialExpiry
 ${hints?.potentialDosage ? `Local candidate dosage/strength: ${hints.potentialDosage}` : ''}
 ${hints?.potentialQuantity ? `Local candidate strip/pack quantity: ${hints.potentialQuantity}` : ''}
 
-CRITICAL RULES:
+CRITICAL RULES (USE OFFICIAL PHARMACEUTICAL DATA / GOOGLE SEARCH KNOWLEDGE):
 1. Fix any OCR typographical errors (e.g. Paracetam0l -> Paracetamol, Am0xicillin -> Amoxicillin).
 2. Extract exact medicine details:
    - Name: Medicine brand name & composition.
-   - Dosage: Strength (e.g. 500mg, 625mg, 10ml).
+   - Dosage: Strength (e.g. 500mg, 625mg, 10ml, 5g).
    - Expiration Date: Format YYYY-MM-01 (use the 1st day of the month).
    - Usage Instructions: Daily frequency/instructions/storage warnings.
-   - Form: tablet, capsule, syrup, ampule, powder, tape, liquid, or other.
+   - Form (CRITICAL - DO NOT CONFUSE):
+     * "powder": Oral powders, dusting powders, rehydration sachets, effervescent granules (e.g. ORS, Electral, Eno, Candid Dusting Powder, Nycil, Abzorb). NEVER select "tablet" or "syrup" for powders!
+     * "syrup": Oral liquid suspensions, cough syrups, pediatric drops, liquid antacids, tonics (e.g. Benadryl, Ascoril, Gelusil, Calpol syrup). NEVER select generic "liquid" for medicinal syrups!
+     * "oil": Medicated oils, ayurvedic oils, pain relief massage oils, herbal taila/roghan, liniments (e.g. Roghan Badam, Clove oil, Castor oil, Jaitun oil, Pain relief oil).
+     * "tablet", "capsule", "drops", "cream", "lotion", "soap", "ointment", "gel", "spray", "inhaler", "injection", "ampule", "powder", "sachet", "suspension", "tape", "liquid", "oil", or "other".
    - Quantity: Number of units in the strip or pack.
-   - Categories: Array of clinical categories (e.g. ["Fever", "Pain Relief"] for Zerodol-P, Dolo, Combiflam).
+   - Categories: Array of clinical categories (e.g. ["Fever", "Pain Relief"] for Zerodol-P; ["Digestive"] for ORS/Eno; ["Skin Care"] for Dusting Powder; ["Oil", "Pain Relief"] for pain oils).
    - Category: Comma-separated string of categories.`;
 
     const response = await generateContentWithModelFallbackClient(ai, {
@@ -280,7 +284,7 @@ CRITICAL RULES:
               enum: [
                 "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
                 "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
-                "powder", "sachet", "suspension", "tape", "liquid", "other"
+                "powder", "sachet", "suspension", "tape", "liquid", "oil", "other"
               ] 
             },
             quantity: { type: 'NUMBER' as any },
@@ -331,14 +335,18 @@ CRITICAL RULES:
 ${clientImages.length > 1 ? `You have been provided with ${clientImages.length} images of this medicine (Front and Back packaging). Cross-examine both views: the front side typically has the brand name & dosage, while the reverse side has the expiry date (EXP/VALID TILL), batch number, and full active salt formulation.` : `Perform exhaustive OCR and analysis to extract all visible text from the packaging.`}
 ${ocrText ? `OCR text detected:\n${ocrText}` : ''}
 
-Extract:
+Extract using Google Search / Pharmaceutical Database Knowledge:
 - Name: Medicine brand name and salt composition.
-- Dosage: Primary active strength (e.g. 500mg, 650mg, 40mg).
+- Dosage: Primary active strength (e.g. 500mg, 650mg, 40mg, 100ml, 5g).
 - Expiration Date: Format YYYY-MM-01 (use the 1st day of the month, e.g. 2026-05-01). Check crimp/back foil stamps closely.
 - Usage Instructions: Daily frequency or directions.
-- Form: tablet, capsule, syrup, drops, cream, lotion, soap, ointment, gel, spray, inhaler, injection, ampule, powder, sachet, suspension, tape, liquid, or other.
-- Quantity: Number of units in strip or container.
-- Categories: Array of clinical categories (e.g. ["Fever", "Pain Relief"] for Zerodol-P, Dolo, Combiflam).
+- Form (CRITICAL RULES - NEVER CONFUSE):
+  * "powder": Oral rehydration powders, dusting powders, effervescent granules (e.g. ORS, Electral, Eno, Candid Dusting Powder, Nycil, Abzorb). NEVER select "tablet" or "syrup" for powders!
+  * "syrup": Oral liquid suspensions, cough syrups, pediatric drops, liquid antacids (e.g. Benadryl, Ascoril, Gelusil, Calpol syrup). NEVER select generic "liquid" for syrups!
+  * "oil": Medicated oils, herbal/ayurvedic oils, pain relief massage oils, liniments (e.g. Roghan Badam, Clove oil, Castor oil, Jaitun oil, Pain relief oil).
+  * Or other exact forms: tablet, capsule, drops, cream, lotion, soap, ointment, gel, spray, inhaler, injection, ampule, powder, sachet, suspension, tape, liquid, oil, or other.
+- Quantity: Number of units in strip or container (default 10 for blister strips, 1 for bottles/syrups/oils).
+- Categories: Array of clinical categories (e.g. ["Fever", "Pain Relief"] for Zerodol-P; ["Digestive"] for ORS/Eno; ["Skin Care"] for Dusting Powder; ["Oil", "Pain Relief"] for pain oils).
 - Category: Comma-separated string of categories.`;
 
   const response = await generateContentWithModelFallbackClient(ai, {
@@ -361,7 +369,7 @@ Extract:
             enum: [
               "tablet", "capsule", "syrup", "drops", "cream", "lotion", "soap", 
               "ointment", "gel", "spray", "inhaler", "injection", "ampule", 
-              "powder", "sachet", "suspension", "tape", "liquid", "other"
+              "powder", "sachet", "suspension", "tape", "liquid", "oil", "other"
             ] 
           },
           quantity: { type: 'NUMBER' as any },
@@ -996,16 +1004,32 @@ export function classifyMedicineLocally(
       category = 'Skin Care';
     } else if (/eye|ear|drop|ophthalmic|otic|moxifloxacin|timolol|tears|carboxymethylcellulose/i.test(fullText)) {
       category = 'Eye & Ear';
+    } else if (/oil\b|tail\b|taila\b|roghan\b|liniment/i.test(fullText)) {
+      category = 'Oil';
     } else {
       category = 'General Care';
     }
     if (categories.length === 0) categories = [category];
   }
 
-  // 4. Allot/verify dosage form
-  if (!form) {
+  // 4. Allot/verify dosage form (CRITICAL: Prioritize explicit powder, syrup, and oil indicators)
+  const isExplicitPowder = /powder|dusting|granule|effervescent|ors\b|electral|eno\b|abzorb|nycil|dermicool/i.test(fullText);
+  const isExplicitOil = /oil\b|tail\b|taila\b|roghan\b|liniment\b|massage\s*oil|hair\s*oil|clove\s*oil|castor\s*oil/i.test(fullText);
+  const isExplicitSyrup = /syrup|cough\s*syrup|elixir|linctus|oral\s*susp|pediatric\s*drops/i.test(fullText);
+
+  if (isExplicitPowder) {
+    form = /sachet/i.test(fullText) ? 'sachet' : 'powder';
+    if (!categories.includes('Digestive') && /ors|electral|eno/i.test(fullText)) categories.push('Digestive');
+    if (!categories.includes('Skin Care') && /dusting|candid|abzorb|dermicool|nycil/i.test(fullText)) categories.push('Skin Care');
+  } else if (isExplicitOil) {
+    form = 'oil';
+    if (!categories.includes('Oil')) categories.push('Oil');
+    if (!categories.includes('Pain Relief') && /pain|joint|muscle|mpy|rheuma/i.test(fullText)) categories.push('Pain Relief');
+  } else if (isExplicitSyrup) {
+    form = /suspension|susp\b/i.test(fullText) ? 'suspension' : 'syrup';
+  } else if (!form) {
     const existingForm = m.form as MedicineForm | undefined;
-    if (existingForm && existingForm !== 'other') {
+    if (existingForm && existingForm !== 'other' && existingForm !== 'liquid') {
       form = existingForm;
     } else if (/capsule|cap\b|softgel/i.test(fullText)) {
       form = 'capsule';
@@ -1029,20 +1053,16 @@ export function classifyMedicineLocally(
       form = 'injection';
     } else if (/ampul|ampule|vial/i.test(fullText)) {
       form = 'ampule';
-    } else if (/sachet|granule/i.test(fullText)) {
+    } else if (/sachet/i.test(fullText)) {
       form = 'sachet';
     } else if (/suspension|oral\s*susp/i.test(fullText)) {
       form = 'suspension';
     } else if (/syrup|cough\s*syrup|elixir/i.test(fullText)) {
       form = 'syrup';
-    } else if (/powder|ors\b/i.test(fullText)) {
-      form = 'powder';
     } else if (/patch|tape|plaster/i.test(fullText)) {
       form = 'tape';
-    } else if (/liniment|wash|gargle/i.test(fullText)) {
-      form = 'liquid';
     } else if (/liquid|solution/i.test(fullText)) {
-      form = 'liquid';
+      form = /oral|cough|cold|antacid|pediatric/i.test(fullText) ? 'syrup' : 'liquid';
     } else {
       form = 'tablet';
     }

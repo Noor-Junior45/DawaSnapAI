@@ -1709,7 +1709,7 @@ export default function App() {
           const validForm = [
             'tablet', 'capsule', 'syrup', 'drops', 'cream', 'lotion', 'soap', 
             'ointment', 'gel', 'spray', 'inhaler', 'injection', 'ampule', 
-            'powder', 'sachet', 'suspension', 'tape', 'liquid', 'other'
+            'powder', 'sachet', 'suspension', 'tape', 'liquid', 'oil', 'other'
           ].includes(form) ? form : 'other';
 
           if (name && expirationDateRaw) {

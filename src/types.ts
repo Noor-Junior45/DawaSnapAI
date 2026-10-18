@@ -26,6 +26,7 @@ export type MedicineForm =
   | 'suspension' 
   | 'tape' 
   | 'liquid' 
+  | 'oil'
   | 'other';
 
 export interface AllottedFormulationResult {

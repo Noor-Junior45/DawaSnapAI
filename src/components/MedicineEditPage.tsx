@@ -32,7 +32,7 @@ const FORM_OPTIONS: MedicineForm[] = [
   'cream', 'lotion', 'soap', 'ointment',
   'gel', 'spray', 'inhaler', 'injection',
   'ampule', 'powder', 'sachet', 'suspension',
-  'tape', 'liquid', 'other'
+  'tape', 'liquid', 'oil', 'other'
 ];
 
 const SCHEDULE_PRESETS = [

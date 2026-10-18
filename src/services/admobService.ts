@@ -24,6 +24,7 @@ export const ADMOB_PRODUCTION_IDS = {
   APP_ID: 'ca-app-pub-5865716270182311~1628341584',
   BANNER: 'ca-app-pub-5865716270182311/9965076733', // DawaSnap_Main_Banner
   REWARDED: 'ca-app-pub-5865716270182311/3189669416', // DawaSnap_Chat_Reward
+  EXPIRED_SECTION_NATIVE: 'ca-app-pub-5865716270182311/6125203379', // DawaSnap_ExpiredSection_Native
 };
 
 // Official Google AdMob Test Ad Unit IDs (Google Sample IDs)
@@ -31,11 +32,13 @@ export const ADMOB_TEST_IDS = {
   BANNER: 'ca-app-pub-3940256099942544/6300978111',
   INTERSTITIAL: 'ca-app-pub-3940256099942544/1033173712',
   REWARDED: 'ca-app-pub-3940256099942544/5224354917',
+  NATIVE: 'ca-app-pub-3940256099942544/2247696110', // Google Sample Native Advanced ID
 };
 
 // Default ad units to use
 export const DEFAULT_BANNER_ID = ADMOB_PRODUCTION_IDS.BANNER;
 export const DEFAULT_REWARDED_ID = ADMOB_PRODUCTION_IDS.REWARDED || ADMOB_TEST_IDS.REWARDED;
+export const DEFAULT_NATIVE_DIVIDER_ID = ADMOB_PRODUCTION_IDS.EXPIRED_SECTION_NATIVE;
 
 // Safe minimum clearance height (dp) on Android to guarantee banner never overlays floating navbar
 export const DEFAULT_NATIVE_BANNER_HEIGHT = 65;
