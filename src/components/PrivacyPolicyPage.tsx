@@ -62,7 +62,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
                 Privacy Policy &amp; Data Safety Declaration
               </h2>
               <p className="text-xs sm:text-sm font-semibold text-[#78716c] uppercase tracking-wider mt-1.5">
-                Ref: DAWASNAP-PRIVACY-2026-V3.1 &bull; Legal Jurisdiction: India &amp; Global (GDPR) &bull; App Version: 1.2.0 (Build 9)
+                Ref: DAWASNAP-PRIVACY-2026-V3.1 &bull; Legal Jurisdiction: India &amp; Global (GDPR) &bull; App Version: 1.1.9 (Build 11)
               </p>
             </div>
             <div className="text-xs sm:text-sm text-[#78716c] font-medium sm:text-right shrink-0">

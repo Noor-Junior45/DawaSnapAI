@@ -592,7 +592,7 @@ export default function App() {
         setDoc(tokenRef, {
           token: cachedToken,
           platform: 'android',
-          appVersion: '1.2.0',
+          appVersion: '1.1.9',
           updatedAt: new Date().toISOString(),
         }, { merge: true }).catch(() => {});
       }

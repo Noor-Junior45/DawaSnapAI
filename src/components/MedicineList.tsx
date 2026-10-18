@@ -6,7 +6,7 @@ import {
   Filter, RefreshCw, Zap, ArrowUp, ArrowDown, ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
-import { MEDICINE_FORM_ICONS, getCategoryStyle, isCategoryMatch, getMedicineCategories } from '../constants';
+import { MEDICINE_FORM_ICONS, MEDICINE_FORM_LABELS, getCategoryStyle, isCategoryMatch, getMedicineCategories } from '../constants';
 import { triggerLightHaptic, triggerMediumHaptic, triggerSelectionHaptic, triggerSuccessHaptic } from '../utils/haptics';
 import { AdMobNativeCard } from './AdMobNativeCard';
 
@@ -378,22 +378,35 @@ const ActiveGroupCard: React.FC<ActiveGroupCardProps> = ({
                 )}
               </div>
 
-              {/* Medicine Name: clean, bold, locked in ONE line with dot handle, ellipses (...) if long */}
+              {/* Medicine Name: clean, bold, locked with formulation category and expiry tag right next to it */}
               <h3 
-                className="font-bold text-base sm:text-lg tracking-tight text-[#1f1f1f] hover:text-[#0f9d58] transition-colors truncate min-w-0 shrink leading-snug"
+                className="font-bold text-base sm:text-lg tracking-tight text-[#1f1f1f] hover:text-[#0f9d58] transition-colors truncate max-w-fit shrink-0 leading-snug"
                 title={group.name}
               >
                 {brandName}
               </h3>
-              <span className="shrink-0 scale-90 sm:scale-100">{group.form && MEDICINE_FORM_ICONS[group.form]}</span>
-              {group.activeBatches.length > 1 && (
-                <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100 whitespace-nowrap">
-                  <Layers size={10} />
-                  <span>{group.activeBatches.length}</span>
+
+              {/* Formulation sign only, without text label or background */}
+              {group.form && (
+                <span 
+                  className="shrink-0 inline-flex items-center scale-90 sm:scale-100" 
+                  title={`Formulation: ${MEDICINE_FORM_LABELS[group.form] || group.form}`}
+                >
+                  {MEDICINE_FORM_ICONS[group.form]}
                 </span>
               )}
+
+              {/* Multi-batch count tag */}
+              {group.activeBatches.length > 1 && (
+                <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100 whitespace-nowrap">
+                  <Layers size={10} />
+                  <span>{group.activeBatches.length} Batches</span>
+                </span>
+              )}
+
+              {/* Expired batches tag */}
               {group.expiredOrEmptyBatches.length > 0 && (
-                <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">
+                <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">
                   <XCircle size={10} />
                   <span>{group.expiredOrEmptyBatches.length} Exp</span>
                 </span>
@@ -410,14 +423,15 @@ const ActiveGroupCard: React.FC<ActiveGroupCardProps> = ({
               </p>
             )}
 
+            {/* Below this: Dosage, Schedule & Safe or Expiry Tag */}
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span className="flex items-center gap-1 text-slate-500 text-[11px] sm:text-xs">
-                <Package size={12} className="text-slate-400" />
+              <span className="flex items-center gap-1 text-slate-500 text-[11px] sm:text-xs font-medium">
+                <Package size={12} className="text-slate-400 shrink-0" />
                 {group.dosage}
               </span>
               {group.schedule && (
                 <span className="flex items-center gap-1 text-[#1a73e8] text-[11px] sm:text-xs font-semibold">
-                  <Clock size={12} className="text-[#1a73e8]" />
+                  <Clock size={12} className="text-[#1a73e8] shrink-0" />
                   <span className="truncate max-w-[120px]">{group.schedule}</span>
                 </span>
               )}
@@ -426,7 +440,7 @@ const ActiveGroupCard: React.FC<ActiveGroupCardProps> = ({
               </span>
             </div>
 
-            {/* Category Badges */}
+            {/* Below of this: Clinical Categories (antibiotics, digestive, heartburn, etc.) */}
             {(() => {
               const cats = Array.from(new Set(getMedicineCategories(group)));
               if (cats.length === 0) return null;
@@ -875,13 +889,24 @@ export const MedicineList: React.FC<MedicineListProps> = ({
                 }
               }}
             >
-              <div className="flex items-center gap-1.5 min-w-0 w-full">
-                <h3 className="font-bold text-base sm:text-lg tracking-tight text-slate-600 truncate min-w-0 shrink leading-snug" title={group.name}>
+              <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                <h3 className="font-bold text-base sm:text-lg tracking-tight text-slate-600 truncate max-w-fit shrink-0 leading-snug" title={group.name}>
                   <span className="line-through">{brandName}</span>
                 </h3>
-                <span className="shrink-0 scale-90 sm:scale-100">{group.form && MEDICINE_FORM_ICONS[group.form]}</span>
+
+                {/* Formulation sign only, without text label or background */}
+                {group.form && (
+                  <span 
+                    className="shrink-0 inline-flex items-center scale-90 sm:scale-100" 
+                    title={`Formulation: ${MEDICINE_FORM_LABELS[group.form] || group.form}`}
+                  >
+                    {MEDICINE_FORM_ICONS[group.form]}
+                  </span>
+                )}
+
+                {/* Multi-expired count tag */}
                 {group.expiredOrEmptyBatches.length > 1 && (
-                  <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">
+                  <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">
                     <Layers size={10} />
                     <span>{group.expiredOrEmptyBatches.length} Expired</span>
                   </span>
@@ -894,9 +919,10 @@ export const MedicineList: React.FC<MedicineListProps> = ({
                 </p>
               )}
 
+              {/* Below this: Dosage & Expiry / Stock status tag */}
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <span className="flex items-center gap-1 text-slate-500 text-[11px] sm:text-xs">
-                  <Package size={12} className="text-slate-400" />
+                <span className="flex items-center gap-1 text-slate-500 text-[11px] sm:text-xs font-medium">
+                  <Package size={12} className="text-slate-400 shrink-0" />
                   {group.dosage}
                 </span>
                 <span className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 border border-rose-100 text-[#ea4335]">
@@ -904,7 +930,7 @@ export const MedicineList: React.FC<MedicineListProps> = ({
                 </span>
               </div>
 
-              {/* Category Badges */}
+              {/* Below of this: Clinical Categories (antibiotics, digestive, etc.) */}
               {(() => {
                 const cats = Array.from(new Set(getMedicineCategories(group)));
                 if (cats.length === 0) return null;

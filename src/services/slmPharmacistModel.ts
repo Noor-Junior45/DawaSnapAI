@@ -594,16 +594,19 @@ export function evaluateSymptoms(queryText: string): DrugKnowledgeItem[] {
  */
 export function isHinglishOrHindi(text: string): boolean {
   const hinglishTokens = [
-    'kya', 'hai', 'mein', 'mera', 'meri', 'mere', 'paas', 'dawai', 'dawaii', 'dard', 
-    'sar', 'pet', 'bukhar', 'khana', 'khani', 'pehle', 'baad', 'kaise', 'lena', 
-    'le', 'sakte', 'batao', 'chahiye', 'namaste', 'kaunsi', 'ulti', 'gas', 'chheenk'
+    'kya', 'hai', 'hain', 'mein', 'mera', 'meri', 'mere', 'paas', 'dawai', 'dawa', 'dawaii', 'dard', 
+    'sar', 'pet', 'bukhar', 'khana', 'khani', 'pehle', 'baad', 'kaise', 'lena', 'leni',
+    'le', 'sakte', 'batao', 'chahiye', 'namaste', 'kaunsi', 'ulti', 'gas', 'chheenk',
+    'kare', 'karein', 'karta', 'karti', 'chalaye', 'chalayein', 'kis', 'liye', 'hota', 'hoti',
+    'naya', 'nayi', 'hoon', 'aapka', 'aapki', 'shukriya', 'dhanyawad', 'theek', 'sab', 'haal', 'accha',
+    'pranam', 'namaskar', 'khansi', 'jukham', 'bukhaar'
   ];
-  const words = text.toLowerCase().split(/\s+/);
+  const words = text.toLowerCase().split(/[\s,?.!]+/).filter(Boolean);
   let count = 0;
   for (const w of words) {
     if (hinglishTokens.includes(w)) count++;
   }
-  return count >= 2 || /[\u0900-\u097F]/.test(text);
+  return count >= 1 && (count >= 2 || words.length <= 5) || /[\u0900-\u097F]/.test(text);
 }
 
 /**
@@ -836,9 +839,189 @@ export function generateOfflineSlmConsultation(
       `*Data Source: WHO Model List of Essential Medicines & National Formulary of India (NFI).*`;
   }
 
-  // 1. Conversational & Everyday Intent Handlers (Normal Chat)
-  
-  // A. Well-being & Politeness ("how are you?", "are you fine?", "are you okay?", "how's it going?", "kaise ho?")
+  // 1. Conversational & Everyday Intent Handlers (Trained On-Device SLM Model)
+
+  // 1A. Onboarding & App Tutorial: "hi, i am new here, tell how to use app and what is app for?"
+  const isNewUserQuery = 
+    /(?:i\s*am|i['’]?m|im)\s+new\s+(?:here|user|to\s+this|to\s+dawasnap)/i.test(lower) ||
+    /(?:new\s+(?:here|user|member|person|patient)|first\s+time\s+(?:here|user|using|opener)|just\s+(?:joined|downloaded|installed|opened|started))/i.test(lower) ||
+    /(?:main\s+)?(?:naya|nayi)\s+(?:hoon|user|aaya|aayi)/i.test(lower) ||
+    /pehli\s+baar\s+(?:aaya|use|chalaya|dekh\s*raha)/i.test(lower);
+
+  const isHowToUseQuery = 
+    /(?:how\s+(?:to|do\s+i|can\s+i)\s+use|tell\s+(?:me\s+)?how\s+to\s+use|teach\s+me\s+how\s+to\s+use|guide\s+(?:me\s+)?(?:on\s+|how\s+to\s+use)?|how\s+does\s+(?:this\s+app|it|dawasnap)\s+work|app\s+tutorial|app\s+guide|walkthrough|steps\s+to\s+use|instructions\s+for\s+(?:using\s+)?(?:the\s+)?app|where\s+do\s+i\s+start|how\s+to\s+start)\b/i.test(lower) ||
+    /(?:app|dawasnap|system)\s+kaise\s+(?:use|istemal|chala)/i.test(lower) ||
+    /kaise\s+(?:use\s+kare[in]?|chalaye[in]?|use\s+hota\s+hai|chalate\s+hain|shuru\s+kare[in]?)/i.test(lower);
+
+  const isWhatIsAppForQuery = 
+    /(?:what\s+(?:is|does)\s+(?:this\s+)?app\s+(?:for|do|mean)|what\s+is\s+dawasnap\s*(?:ai)?(?:\s+for)?|purpose\s+of\s+(?:this\s+)?app|why\s+(?:should\s+i\s+)?use\s+(?:this\s+app|dawasnap)|what\s+are\s+the\s+features\s+of\s+(?:this\s+)?app|what\s+is\s+this\s+application\s+for|benefits\s+of\s+(?:this\s+)?app)\b/i.test(lower) ||
+    /(?:app|dawasnap)\s+kis\s+(?:kaam|liye|cheez\s+ke\s+liye)\s+(?:aati\s+hai|hai|use\s+hoti\s+hai)/i.test(lower) ||
+    /(?:is\s+app\s+se\s+kya\s+hota\s+hai|app\s+ka\s+kya\s+kaam\s+hai|app\s+kya\s+karti\s+hai|kya\s+fayda\s+hai)/i.test(lower);
+
+  // Both Onboarding / New User / Full App Overview:
+  if ((isNewUserQuery && (isHowToUseQuery || isWhatIsAppForQuery)) || (isHowToUseQuery && isWhatIsAppForQuery) || isNewUserQuery) {
+    if (isHinglish) {
+      return `Namaste aur **DawaSnap AI** mein aapka bahut-bahut swagat hai! 🙏😊 Main hoon **Dr. Ross**, aapka personal AI Pharmacist aur medicine vault assistant.\n\n` +
+        `### 🌟 DawaSnap AI Kis Liye Hai? (App Purpose):\n` +
+        `DawaSnap AI aapke aur aapke parivaar ki dawaiyon ki suraksha aur sahi hisaab ke liye banaya gaya hai:\n` +
+        `1. 🛡️ **Expired Dawaiyon se Suraksha**: Har dawai ki expiry date track karke aapko pehle se alert karta hai taaki galti se bhi koi expired dawai na le.\n` +
+        `2. 📦 **Home Medicine Vault**: Aapke paas kitni tablets, syrups, drops, powders, ointments ya oils bachi hain, uska exact live count rakhta hai.\n` +
+        `3. 📸 **Instant Camera Scanner**: Dawai ki strip ya bottle ki photo lene par AI apne aap naam, form, dosage aur expiry date extract kar leta hai.\n` +
+        `4. ⚠️ **Drug Interaction & Safety Check**: Do dawaiyon ko ek sath lene par koi dangerous reaction toh nahi hoga aur khane se pehle/baad lene ka sahi samay batata hai.\n` +
+        `5. ⚡ **100% Offline Kaam Karta Hai**: Bina internet connection ke bhi pura assistant aur vault bilkul smoothly chalta hai.\n\n` +
+        `---\n\n` +
+        `### 🚀 App Ko Kaise Use Karein? (4 Aasan Kadam):\n` +
+        `1. 📸 **Dawai Add Karein ("+" Button)**:\n` +
+        `   - Screen ke niche **"+"** (Add) button par tap karein.\n` +
+        `   - **Camera Scan** chunein aur packaging ki photo lein, ya **Manual Entry** se likhein.\n` +
+        `   - AI details padhkar form me bhar dega, fir **Save to Vault** dabayein.\n\n` +
+        `2. 🏠 **Home Screen Par Vault Dekhein**:\n` +
+        `   - Sabhi active medicines aapko Home screen par formulation badge aur expiry status ke sath dikhengi.\n` +
+        `   - Jab bhi aap koi dose lein, **-1** button dabakar stock count turant kam kar sakte hain.\n\n` +
+        `3. 💬 **Dr. Ross Se Salah Lein (Chat Tab)**:\n` +
+        `   - Mujhse kabhi bhi poochhein: *"Mere paas bukhar ki kaunsi dawai hai?"*, *"Khane se pehle lena hai ya baad me?"*, ya *"Interaction check karo"*.\n\n` +
+        `4. 👤 **Profile & Backup**:\n` +
+        `   - Profile tab me jakar doctor ke liye PDF report banayein aur apna data securely backup karein.\n\n` +
+        `Kya hum aapki pehli dawai add karne me madad karein? Niche **"+"** button dabayein ya mujhse koi bhi sawal poochhein! 💊😊`;
+    }
+
+    return `Hello and a very warm welcome to **DawaSnap AI**! 👋😊 I am **Dr. Ross**, your on-device AI Pharmacist and Medicine Vault Assistant.\n\n` +
+      `### 🌟 What is DawaSnap AI For?\n` +
+      `DawaSnap AI is your smart, private, and secure personal home pharmacy manager designed to:\n` +
+      `1. 🛡️ **Prevent Expired Medication Accidents**: Automatically monitors expiration dates for all your medications and sends smart alerts before any drug expires.\n` +
+      `2. 📦 **Complete Home Medicine Vault**: Keeps an organized, real-time count of all your family's tablets, syrups, drops, powders, ointments, and oils.\n` +
+      `3. 📸 **Instant Smart Packaging Scanner**: Snap a photo of any blister strip, bottle, or carton to automatically detect its brand name, formulation, dosage, and expiry date.\n` +
+      `4. ⚠️ **Drug Interaction & Safety Checks**: Evaluates combinations of medicines in your vault for dangerous interactions and food timing recommendations (before or after meals).\n` +
+      `5. ⚡ **100% Offline-Ready**: Runs entirely on your device with zero internet required, keeping your personal health records completely private.\n\n` +
+      `---\n\n` +
+      `### 🚀 How to Use the App (Quick 4-Step Guide):\n` +
+      `1. 📸 **Add a Medicine (Tap "+")**:\n` +
+      `   - Tap the blue **"+" (Add)** button in the bottom navigation bar.\n` +
+      `   - Choose **Camera Scan** to photograph your packaging, or choose **Manual Entry** to type it in.\n` +
+      `   - Review the auto-detected details and tap **Save to Vault**.\n\n` +
+      `2. 🏠 **Manage Your Vault (Home Screen)**:\n` +
+      `   - Your medications are displayed on the Home screen grouped into Active and Expired sections.\n` +
+      `   - Each card clearly displays the formulation sign, dosage, safety status, and days until expiry.\n` +
+      `   - Tap the **-1** button whenever you consume a dose to quickly decrement your inventory.\n\n` +
+      `3. 💬 **Consult Dr. Ross (Chat Screen)**:\n` +
+      `   - Use this chat anytime to check what medicines you have (e.g., *"What do I have for fever?"* or *"Count my medicines"*).\n` +
+      `   - Ask about drug safety, administration timing, or multi-drug interactions.\n\n` +
+      `4. 👤 **Profile & Backup**:\n` +
+      `   - Go to **Profile** to export PDF reports for your doctor, customize notification alerts, and manage backups.\n\n` +
+      `Ready to get started? Tap the **"+"** button below to scan your first medicine, or ask me any question! 💊✨`;
+  }
+
+  // 1B. App Purpose Alone: "what is app for?", "what does this app do?", "app kis liye hai?"
+  if (isWhatIsAppForQuery) {
+    if (isHinglish) {
+      return `🩺 **DawaSnap AI Ka Mukhya Udeshya (What is DawaSnap AI For):**\n\n` +
+        `DawaSnap AI aapke ghar ki digital pharmacy aur personal health safety manager hai:\n\n` +
+        `1. 🛡️ **Zero Expired Medicines**: Ghar me rakhi hui dawaiyon ki expiry track karna taaki koi bhi anjaane me kharab dawai na khaye.\n` +
+        `2. 📦 **Live Digital Medicine Vault**: Pata hona ki kaunsi tablet, syrup, powder ya oil kitni quantity me available hai.\n` +
+        `3. 📸 **AI Packaging Scanner**: Photo khinchte hi strip/bottle se naam, batch, expiry aur dose pehchan lena.\n` +
+        `4. ⚠️ **Drug Interaction Safety**: Check karna ki do dawaiyan ek sath safe hain ya nahi aur khane ka sahi samay kya hai.\n` +
+        `5. 🔒 **100% Private & Offline**: Saara medical data aapke device par surakshit rehta hai bina internet dependency ke.\n\n` +
+        `Aap abhi **"+"** button dabakar apni pehli dawai add kar sakte hain ya mujhse koi bhi sawal pooch sakte hain! 😊💊`;
+    }
+
+    return `🩺 **What DawaSnap AI is For:**\n\n` +
+      `DawaSnap AI is your personal, AI-powered home pharmacy organizer and clinical safety companion:\n\n` +
+      `1. 🛡️ **Expired Medication Prevention**: Automatically monitors expiration dates across all stored drugs, sending early warnings before they expire.\n` +
+      `2. 📦 **Live Home Medicine Vault**: Gives you an instant, organized count of all your family's tablets, syrups, drops, powders, ointments, and oils.\n` +
+      `3. 📸 **Instant Smart Packaging Scanner**: Reads medicine strips and bottles using on-device vision to capture names, doses, and expiry dates in seconds.\n` +
+      `4. ⚠️ **Drug Interaction & Timing Engine**: Analyzes your medicines for harmful contraindications, food timings (before/after meals), and dosage limits.\n` +
+      `5. 🔒 **100% On-Device & Private**: Fully functional offline without cloud delays, keeping your personal health information confidential.\n\n` +
+      `Would you like to scan your first medicine or check your current vault? Tap the **"+"** button below! 😊💊`;
+  }
+
+  // 1C. How to Use Alone: "how to use app?", "app kaise use karein?", "guide me how to use"
+  if (isHowToUseQuery) {
+    if (isHinglish) {
+      return `📖 **DawaSnap AI Kaise Use Karein (Step-by-Step Guide):**\n\n` +
+        `DawaSnap AI chalana bahut aasan hai, bas in steps ko follow karein:\n\n` +
+        `1. 📸 **Dawai Add Karein ("+" Button)**:\n` +
+        `   - Bottom bar me **"+"** button par tap karein.\n` +
+        `   - **Camera Scan** se dawai ke patte (strip) ya bottle ki photo lein, ya **Manual Entry** se naam likhein.\n` +
+        `   - AI expiry date aur dose pehchan lega, fir **Save to Vault** dabayein.\n\n` +
+        `2. 🏠 **Home Screen Par Vault Manage Karein**:\n` +
+        `   - Aapki saari dawaiyan category-wise Home par dikhengi.\n` +
+        `   - Har dawai ke card par uska form sign, dosage aur expiry countdown hota hai.\n` +
+        `   - Jab bhi aap koi goli khayein, **-1** button dabakar stock update karein.\n\n` +
+        `3. 💬 **AI Pharmacist Se Baat Karein (Chat Screen)**:\n` +
+        `   - Mujhse poochhein: *"Mere paas bukhar ki kaunsi dawai hai?"* ya *"Aciloc khane se pehle lena hai ya baad me?"*.\n\n` +
+        `4. 👤 **Profile & Alerts**:\n` +
+        `   - Profile tab me notification timings set karein aur doctor report generate karein.\n\n` +
+        `Bas yahi hai! Shuru karne ke liye niche **"+"** button dabayein! 😊💊`;
+    }
+
+    return `📖 **How to Use DawaSnap AI (Quick Step-by-Step Guide):**\n\n` +
+      `Using DawaSnap AI is fast and intuitive:\n\n` +
+      `1. 📸 **Add a Medicine ("+" Button)**:\n` +
+      `   - Tap the **"+"** button in the bottom navigation bar.\n` +
+      `   - Select **Camera Scan** to snap a photo of any blister strip or bottle, or select **Manual Entry** to type.\n` +
+      `   - Review the auto-detected formulation, dosage, and expiry, then tap **Save to Vault**.\n\n` +
+      `2. 🏠 **Track Your Vault (Home Screen)**:\n` +
+      `   - Your medications are neatly displayed with formulation signs and days-to-expiry counters.\n` +
+      `   - Tap the **-1** button whenever you take a dose to keep your inventory accurate.\n\n` +
+      `3. 💬 **Consult Dr. Ross (Chat Screen)**:\n` +
+      `   - Ask questions like: *"Do I have anything for a headache?"* or *"What are the side effects of Paracetamol?"*.\n\n` +
+      `4. 👤 **Profile & Reports**:\n` +
+      `   - Visit Profile to customize reminder alerts, download PDF clinical reports, and manage backups.\n\n` +
+      `Tap the **"+"** button below to add your first medicine now! 😊💊`;
+  }
+
+  // 1D. Time-based Greetings ("good morning", "good afternoon", "good evening", "good night")
+  if (/(?:good\s*morning|shubh\s*prabhat|subah\s*bakhair)\b/i.test(lower)) {
+    if (isHinglish) {
+      return `Shubh Prabhat! ☀️ Good morning! Umeed hai aapki subah taazgi bhari hogi. Kya aapne subah ki nirdharit dawai le li hai? Agar aapko vault check karna hai ya koi dawai ka samay poochna hai, toh main taiyar hoon! 💊🌿\n\n`;
+    }
+    return `Good morning! ☀️ Wishing you a vibrant, healthy day ahead. Have you taken your scheduled morning medications? Let me know if you would like to check your vault or review any dosage timings! 💊🌿\n\n`;
+  }
+
+  if (/(?:good\s*afternoon|shubh\s*dopahar)\b/i.test(lower)) {
+    if (isHinglish) {
+      return `Good afternoon! 🌤️ Shubh dopahar! Umeed hai aapka din achha guzar raha hai. Dopahar ki dawaiyon ka samay yaad rakhein. Main aapki kya madad kar sakta hoon? 💊\n\n`;
+    }
+    return `Good afternoon! 🌤️ Hope your day is going smoothly. Remember to check if any afternoon medications are due. How can I assist you with your health or medicine vault today? 💊\n\n`;
+  }
+
+  if (/(?:good\s*evening|shubh\s*sandhya|shaam\s*bakhair)\b/i.test(lower)) {
+    if (isHinglish) {
+      return `Good evening! 🌆 Shubh sandhya! Din bhar ke baad apna khayal rakhein aur shaam ya dinner ke samay ki dawaiyan samay par lein. Aaj main aapki kya madad karoon? 💊🩺\n\n`;
+    }
+    return `Good evening! 🌆 Hope you had a productive day. Don't forget your evening or post-dinner medication schedule. How can I assist you with your health and medicine vault tonight? 💊🩺\n\n`;
+  }
+
+  if (/(?:good\s*night|shubh\s*ratri|sweet\s*dreams)\b/i.test(lower)) {
+    if (isHinglish) {
+      return `Shubh Ratri! 🌙 Good night! Khoob aaram karein aur swasth rahein. Agar sone se pehle koi dawai leni ho toh zaroor lein. Take care! 😴💊\n\n`;
+    }
+    return `Good night! 🌙 Rest well and take care of your health. If you have any bedtime medications prescribed, please remember to take them on schedule. Sleep peacefully! 😴💊\n\n`;
+  }
+
+  // 1E. Traditional Cultural & Multi-lingual Greetings
+  if (/(?:namaste|namaskar|namaskaram|pranam|pranaam|charan\s*sparsh)\b/i.test(lower)) {
+    if (isHinglish) {
+      return `Namaste! 🙏 DawaSnap AI mein aapka swagat hai. Main hoon Dr. Ross, aapka digital pharmacist. Aaj main aapki dawaiyon, vault check ya swasthya me kaise sahayata kar sakta hoon? 💊🌿\n\n`;
+    }
+    return `Namaste! 🙏 Welcome to DawaSnap AI. I am Dr. Ross, your personal AI Pharmacist. How can I assist you today with your medication schedule, vault inventory, or health questions? 💊🌿\n\n`;
+  }
+
+  if (/(?:as-salamu\s*alaykum|assalamu\s*alaikum|salam|salaam|adaab)\b/i.test(lower)) {
+    if (isHinglish) {
+      return `Wa alaykumu s-salam wa Rahmatullah! 🌙 DawaSnap AI me aapka swagat hai. Main aapki dawaiyon aur sehat ki dekhbhal me kaise madad kar sakta hoon? 🌿💊\n\n`;
+    }
+    return `Wa alaykumu s-salam! 🌙 Welcome to DawaSnap AI. I am Dr. Ross, your personal pharmacist assistant. How may I assist you with your medications and health today? 🌿💊\n\n`;
+  }
+
+  if (/(?:sat\s*sri\s*akaal|sas\s*sri\s*akal|radhe\s*radhe|jai\s*shri\s*(?:krishna|ram)|har\s*har\s*mahadev|kem\s*cho|vanakkam|khamma\s*ghani)\b/i.test(lower)) {
+    if (isHinglish) {
+      return `Swagat hai aapka DawaSnap AI mein! 🙏 Main hoon Dr. Ross. Aaj main aapki dawaiyon, vault inventory check ya health advice me kaise sahayata kar sakta hoon? 💊🌿\n\n`;
+    }
+    return `Warm greetings and welcome to DawaSnap AI! 🙏 I am Dr. Ross, your AI Pharmacist. How can I assist you with your health, medications, or vault inventory today? 💊🌿\n\n`;
+  }
+
+  // 1F. Well-being & Politeness ("how are you?", "are you fine?", "are you okay?", "how's it going?", "kaise ho?")
   if (
     /how\s*(are|r)\s*(you|u)/i.test(lower) ||
     /(are|r)\s*(you|u)\s*(fine|ok|okay|good|alright)/i.test(lower) ||
@@ -864,12 +1047,28 @@ export function generateOfflineSlmConsultation(
     return englishGreetings[Math.floor(Math.random() * englishGreetings.length)];
   }
 
-  // B. Work / Capabilities / Purpose ("what's work to do?", "what can you do?", "what is your work?", "who are you?", "kaam kya hai?")
+  // 1G. Identity & Role ("who are you?", "what is your name?", "who made you?", "aap kaun ho?")
+  if (
+    /who\s*(are|r)\s*(you|u)/i.test(lower) ||
+    /what\s*is\s*your\s*name/i.test(lower) ||
+    /what\s*should\s*i\s*call\s*you/i.test(lower) ||
+    /who\s*made\s*you/i.test(lower) ||
+    /aap\s*kaun\s*ho/i.test(lower) ||
+    /tum\s*kaun\s*ho/i.test(lower) ||
+    /aapka\s*naam\s*kya\s*hai/i.test(lower) ||
+    /^(?:dr\.?\s*ross|hello\s+doctor|hi\s+doc(?:tor)?|dr\s+ross)[!?.\s]*$/i.test(lower)
+  ) {
+    if (isHinglish) {
+      return `Mera naam **Dr. Ross** hai! 🩺 Main DawaSnap AI ka on-device clinical pharmacist aur medicine vault assistant hoon.\n\nMera kaam aapke ghar ki dawaiyon ki expiry track karna, doses yaad dilana, aur kisi bhi dawai ke bare me sahi jankari dena hai—bina internet ke bhi! Bataiye aaj main aapki kya madad kar sakta hoon? 😊💊\n\n`;
+    }
+    return `I am **Dr. Ross**! 🩺 Your personal AI Pharmacist and Medicine Vault Assistant in DawaSnap AI.\n\nI am here 24/7 to help you track your home medicine inventory, prevent expired medication accidents, review drug-drug interactions, and provide accurate dosage guidance—even 100% offline without internet. How can I assist you with your health today? 😊💊\n\n`;
+  }
+
+  // 1H. Work / Capabilities / Purpose ("what's work to do?", "what can you do?", "what is your work?", "kaam kya hai?")
   if (
     /what('?s|\s+is)?\s*work\s*(to\s*do)?/i.test(lower) ||
     /what\s*(can|do)\s*you\s*do/i.test(lower) ||
     /what\s*is\s*your\s*(work|job|role|purpose)/i.test(lower) ||
-    /who\s*are\s*you/i.test(lower) ||
     /how\s*can\s*you\s*help/i.test(lower) ||
     /kya\s*kaam/i.test(lower) ||
     /kaam\s*kya\s*hai/i.test(lower) ||
@@ -882,27 +1081,26 @@ export function generateOfflineSlmConsultation(
     return `Here is how I can assist with your medication tracking: 🩺💊\n\n1. 📦 **Check Your Medicine Vault**: View and count active medications stored in your inventory.\n2. ⚠️ **Drug Interaction Safety**: Cross-reference standard pharmacological interaction warnings.\n3. ⏰ **Timing Guidelines**: Provide administration timing instructions based on your prescription.\n4. 🔍 **Reference Compendium**: View indications and precautions from public pharmacopeia references.\n5. 📸 **Packaging Scanner**: Scan blister strips, bottles, and expiry dates to catalog your vault.\n6. 🩺 **Offline Execution**: Fully operational offline via our rule-based clinical formulary.\n\nWhat would you like to review today? 😊\n\n`;
   }
 
-  // C. Standard Greetings ("hi", "hello", "hey", "namaste", "good morning", "good evening")
+  // 1I. All Standard & Casual Greetings ("hi", "hello", "hey", "hola", "hiya", "howdy", "yo")
   if (
-    /^(hi|hello|hey|namaste|good\s*(morning|evening|afternoon)|salam|greetings|hola)\b/i.test(lower) && 
-    lower.length < 40
+    /^(?:hi+|hello+|hey+|hola|hiya|howdy|yo|hai|hlo|greetings)\b/i.test(lower)
   ) {
     if (isHinglish) {
-      return `Namaste! 🙏 Aaj main aapki dawaiyon, vault check ya swasthya me kaise madad kar sakta hoon? 💊🌿\n\n`;
+      return `Hello! Namaste! 🙏 Main hoon Dr. Ross, aapka DawaSnap AI Pharmacist. Aaj main aapki dawaiyon, vault inventory check ya sehat ke sawalon me kaise madad kar sakta hoon? 💊🌿\n\n`;
     }
-    return `Hello! 😊 How can I help you today with your medications, vault inventory check, or health advice? 💊🩺\n\n`;
+    return `Hello! 😊 I'm Dr. Ross, your personal DawaSnap AI Pharmacist. How can I help you today with your medications, vault inventory check, or health advice? 💊🩺\n\n`;
   }
 
-  // D. Gratitude ("thank you", "thanks", "dhanyawad", "shukriya")
-  if (/^(thank\s*you|thanks|many\s*thanks|dhanyawad|shukriya|thanku)\b/i.test(lower)) {
+  // 1J. Gratitude ("thank you", "thanks", "dhanyawad", "shukriya")
+  if (/^(?:thank\s*you|thanks|many\s*thanks|thank\s*u|thanku|dhanyawad|shukriya|bahut\s*shukriya)\b/i.test(lower)) {
     if (isHinglish) {
       return `Aapka bahut-bahut swagat hai! 😊 Mujhe aapki madad karke khushi hui. Apna achhe se khayal rakhein aur dawaiyan nirdharit samay par lein! 🌿🙏\n\n`;
     }
     return `You're very welcome! 😊 It's always my pleasure to help you stay healthy and safe. Remember to take your medications on time, and reach out anytime you need assistance! 💊🙏\n\n`;
   }
 
-  // E. Affirmations / Closure ("ok", "okay", "got it", "theek hai", "accha", "bye")
-  if (/^(ok|okay|alright|got\s*it|theek\s*hai|accha|samajh\s*gaya|bye|goodbye|see\s*you)\b/i.test(lower) && lower.length < 25) {
+  // 1K. Affirmations / Closure ("ok", "okay", "got it", "theek hai", "accha", "bye")
+  if (/^(?:ok|okay|alright|got\s*it|theek\s*hai|accha|samajh\s*gaya|bye|goodbye|see\s*you|take\s*care|alvida)\b/i.test(lower) && lower.length < 35) {
     if (isHinglish) {
       return `Bahut badhiya! 👍 Apna khayal rakhein, samay par dawai lein aur khoob paani piyein. Zaroorat padne par main hamesha yahan hoon! 💊🌿\n\n`;
     }

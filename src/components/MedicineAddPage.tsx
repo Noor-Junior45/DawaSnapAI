@@ -768,8 +768,9 @@ export const MedicineAddPage: React.FC<MedicineAddPageProps> = ({
                 type="button"
                 onClick={() => updateField('enableEmailExpiryAlert', !formData.enableEmailExpiryAlert)}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  formData.enableEmailExpiryAlert !== false ? 'bg-[#0f9d58]' : 'bg-slate-300'
+                  formData.enableEmailExpiryAlert !== false ? '' : 'bg-slate-300'
                 }`}
+                style={formData.enableEmailExpiryAlert !== false ? { backgroundColor: 'var(--accent-color, #0f9d58)' } : undefined}
               >
                 <span
                   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
@@ -794,8 +795,9 @@ export const MedicineAddPage: React.FC<MedicineAddPageProps> = ({
                 type="button"
                 onClick={() => updateField('enableEmailLowStockAlert', !formData.enableEmailLowStockAlert)}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  formData.enableEmailLowStockAlert !== false ? 'bg-[#0f9d58]' : 'bg-slate-300'
+                  formData.enableEmailLowStockAlert !== false ? '' : 'bg-slate-300'
                 }`}
+                style={formData.enableEmailLowStockAlert !== false ? { backgroundColor: 'var(--accent-color, #0f9d58)' } : undefined}
               >
                 <span
                   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${

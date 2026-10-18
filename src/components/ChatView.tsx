@@ -47,6 +47,7 @@ interface ChatViewProps {
 }
 
 const SUGGESTED_PROMPTS = [
+  { icon: <span className="text-[14px]">👋</span>, label: "New here? How to use app 💡", prompt: "Hi, I am new here, tell how to use app and what is app for?" },
   { icon: <span className="text-[14px]">🔍</span>, label: "Check drug interactions 🔍", prompt: "Can you analyze my active medicines to see if there are any dangerous drug-to-drug interactions I should be aware of?" },
   { icon: <span className="text-[14px]">⚠️</span>, label: "Explain side effects ⚠️", prompt: "What are the key side effects of the medicines currently in my inventory, and what warnings should I note?" },
   { icon: <span className="text-[14px]">📅</span>, label: "Daily schedule help 📅", prompt: "Help me organize a safe daily consumption schedule for all the medications in my list." },

@@ -791,27 +791,40 @@ export function getSpecialistForTask(queryText: string, provider?: 'gemini' | 's
 }
 
 /**
- * Detects if a message is purely a greeting / pleasantry without any medical, vault, or medication questions.
+ * Detects if a message is an onboarding inquiry, app guide, app purpose question,
+ * or pleasantry/greeting that should be handled instantly by the on-device SLM model.
  */
 export function isGreetingOnly(text: string): boolean {
   if (!text) return false;
   const lower = text.trim().toLowerCase();
 
-  // If query contains any clinical, vault, medicine, or health keywords, it is NEVER just a greeting!
+  // 1. Onboarding & App Tutorial / Purpose / New User patterns
+  const isOnboardingOrAppHelp = 
+    /(?:i\s*am|i['’]?m|im)\s+new\s+(?:here|user|to\s+this|to\s+dawasnap)/i.test(lower) ||
+    /(?:new\s+(?:here|user|member|person|patient)|first\s+time\s+(?:here|user|using|opener)|just\s+(?:joined|downloaded|installed|opened|started))/i.test(lower) ||
+    /(?:how\s+(?:to|do\s+i|can\s+i)\s+use|tell\s+(?:me\s+)?how\s+to\s+use|teach\s+me\s+how\s+to\s+use|guide\s+(?:me\s+)?(?:on\s+|how\s+to\s+use)?|how\s+does\s+(?:this\s+app|it|dawasnap)\s+work|app\s+tutorial|app\s+guide|walkthrough|steps\s+to\s+use)\b/i.test(lower) ||
+    /(?:what\s+(?:is|does)\s+(?:this\s+)?app\s+(?:for|do|mean)|what\s+is\s+dawasnap\s*(?:ai)?(?:\s+for)?|purpose\s+of\s+(?:this\s+)?app|why\s+(?:should\s+i\s+)?use\s+(?:this\s+app|dawasnap)|what\s+are\s+the\s+features\s+of\s+(?:this\s+)?app|what\s+is\s+this\s+application\s+for|benefits\s+of\s+(?:this\s+)?app)\b/i.test(lower) ||
+    /(?:app|dawasnap|system)\s+kaise\s+(?:use|istemal|chala)/i.test(lower) ||
+    /(?:app|dawasnap)\s+kis\s+(?:kaam|liye|cheez\s+ke\s+liye)\s+(?:aati\s+hai|hai|use\s+hoti\s+hai)/i.test(lower) ||
+    /(?:is\s+app\s+se\s+kya\s+hota\s+hai|app\s+ka\s+kya\s+kaam\s+hai|kya\s+fayda\s+hai|kaise\s+use\s+kare[in]?|main\s+naya\s+hoon|nayi\s+hoon)/i.test(lower);
+
+  if (isOnboardingOrAppHelp) {
+    return true;
+  }
+
+  // If query contains clinical ailment diagnosis or inventory query:
   const hasMedicalOrQueryKeywords = /(?:medicine|meds?|drug|tablet|pill|syrup|capsule|tape|powder|ointment|balm|vault|inventory|stock|count|total|quantity|qty|have|present|fever|bukhar|pain|dard|cold|cough|khansi|headache|ache|stomach|gas|acid|infection|antibiotic|allergy|dose|dosage|expire|expiry|timing|take|interaction|side\s*effect|doctor|prescri|symptom|ill|sick|disease|treatment|remedy)/i.test(lower);
   if (hasMedicalOrQueryKeywords) {
     return false;
   }
 
-  // Pure greeting patterns:
-  return /^(?:hi+|hello+|hey+|hola|namaste|pranam|salam|as-salamu\s*alaykum|greetings|good\s*(?:morning|afternoon|evening|day|night)|how\s*are\s*you(?:'re)?|how\s*r\s*u|how\s*do\s*you\s*do|who\s*are\s*you|who\s*r\s*u|what\s*is\s*your\s*name)[!?.,\s]*$/i.test(lower);
+  // Pure greeting & pleasantry patterns:
+  return /^(?:hi+|hello+|hey+|hola|hiya|howdy|yo|hai|hlo|namaste|namaskar|namaskaram|pranam|pranaam|salam|salaam|as-salamu\s*alaykum|assalamu\s*alaikum|adaab|sat\s*sri\s*akaal|radhe\s*radhe|vanakkam|kem\s*cho|khamma\s*ghani|greetings|good\s*(?:morning|afternoon|evening|day|night)|how\s*are\s*you(?:'re)?|how\s*r\s*u|how\s*do\s*you\s*do|who\s*are\s*you|who\s*r\s*u|what\s*is\s*your\s*name|what\s*(?:can|do)\s*you\s*do|dr\.?\s*ross|kaise\s*ho|kya\s*haal|sab\s*theek|thank\s*you|thanks|many\s*thanks|thanku|dhanyawad|shukriya|bahut\s*shukriya|bye|goodbye|see\s*you|take\s*care|ok|okay|theek\s*hai|accha|alvida)[!?.,\s]*$/i.test(lower);
 }
 
 /**
  * Determines whether a task should be handled by On-Device SLM vs Cloud Gemini AI.
- * Per user requirement:
- * "if slm model not working than just use slm model for greeting and all other task to gemini without any other adding tag in ui."
- * Only pure greetings are handled by SLM; all questions, vault queries, and clinical tasks are handled by Gemini.
+ * Pure greetings, new user onboarding, and app usage instructions are handled by the trained On-Device SLM.
  */
 export function isSlmSpecializedTask(queryText: string): boolean {
   return isGreetingOnly(queryText);
@@ -824,11 +837,11 @@ export async function chatWithAI(
   medicines?: any[]
 ): Promise<AIChatResponse> {
   const lastUserMsg = messages[messages.length - 1]?.content || '';
-  const isGreeting = isGreetingOnly(lastUserMsg);
+  const isGreetingOrHelp = isGreetingOnly(lastUserMsg);
 
-  // 1. Pure greeting messages -> handled immediately by On-Device SLM (0ms, 0 cost)
-  if (isGreeting) {
-    console.log('[SLM ROUTER ACTIVE] Pure greeting message -> routed to On-Device SLM...');
+  // 1. Pure greeting or onboarding messages -> handled immediately by On-Device SLM (0ms, 0 cost)
+  if (isGreetingOrHelp) {
+    console.log('[SLM ROUTER ACTIVE] Greeting or Onboarding message -> routed to On-Device SLM...');
     const slmResponse = generateOfflineSlmConsultation(lastUserMsg, medicines || [], messages);
     return { content: slmResponse, provider: 'slm' };
   }

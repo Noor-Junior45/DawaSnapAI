@@ -362,12 +362,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* ALERTS & RECURRING REMINDERS */}
           <div className="space-y-4 pt-4 border-t border-[#e3e2e0]/60">
-            <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-[#0f9d58] px-1">Alerts & Reminders</h4>
+            <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-[#0f9d58] px-1">
+              Alerts & Reminders
+            </h4>
             
             {/* Email Switch */}
             <div className="flex items-center justify-between px-1 gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 shadow-3xs border border-blue-100">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-3xs border transition-all"
+                  style={{
+                    backgroundColor: emailNotificationsEnabled ? `${accentColor}18` : '#f1f5f9',
+                    color: emailNotificationsEnabled ? accentColor : '#64748b',
+                    borderColor: emailNotificationsEnabled ? `${accentColor}35` : '#e2e8f0'
+                  }}
+                >
                   <Mail size={15} />
                 </div>
                 <div>
@@ -375,8 +384,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
               <button 
+                type="button"
                 onClick={() => setEmailNotificationsEnabled(!emailNotificationsEnabled)}
-                className={`w-10 h-5.5 rounded-full transition-all relative shrink-0 ${emailNotificationsEnabled ? 'bg-[#0f9d58]' : 'bg-[#e3e2e0]'}`}
+                className={`w-10 h-5.5 rounded-full transition-all relative shrink-0 cursor-pointer ${emailNotificationsEnabled ? '' : 'bg-[#e3e2e0]'}`}
+                style={emailNotificationsEnabled ? { backgroundColor: accentColor } : undefined}
                 aria-label="Toggle Email Alerts"
               >
                 <div 
@@ -388,7 +399,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Notifications Switch (Push, Browser & Native App Permissions) */}
             <div className="flex items-center justify-between px-1 pt-2 border-t border-slate-100 gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 shadow-3xs border border-amber-100">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-3xs border transition-all"
+                  style={{
+                    backgroundColor: notificationGranted ? `${accentColor}18` : '#f1f5f9',
+                    color: notificationGranted ? accentColor : '#64748b',
+                    borderColor: notificationGranted ? `${accentColor}35` : '#e2e8f0'
+                  }}
+                >
                   <Bell size={15} />
                 </div>
                 <div>
@@ -398,7 +416,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button 
                 type="button"
                 onClick={handleToggleNotifications}
-                className={`w-10 h-5.5 rounded-full transition-all relative shrink-0 cursor-pointer ${notificationGranted ? 'bg-[#0f9d58]' : 'bg-[#e3e2e0]'}`}
+                className={`w-10 h-5.5 rounded-full transition-all relative shrink-0 cursor-pointer ${notificationGranted ? '' : 'bg-[#e3e2e0]'}`}
+                style={notificationGranted ? { backgroundColor: accentColor } : undefined}
                 aria-label="Toggle Notifications"
                 title={notificationGranted ? "Notifications enabled" : "Notifications disabled - Click to request permission"}
               >
@@ -411,7 +430,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Cookie Consent */}
             <div className="flex items-center justify-between px-1 pt-2 border-t border-slate-100 gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#f6ecde] text-[#a0522d] flex items-center justify-center shrink-0 shadow-3xs border border-[#eeddc5]">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-3xs border transition-all"
+                  style={{
+                    backgroundColor: cookieConsent ? `${accentColor}18` : '#f1f5f9',
+                    color: cookieConsent ? accentColor : '#64748b',
+                    borderColor: cookieConsent ? `${accentColor}35` : '#e2e8f0'
+                  }}
+                >
                   <Cookie size={15} />
                 </div>
                 <div>
@@ -419,6 +445,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
               <button 
+                type="button"
                 onClick={() => {
                   const newConsent = !cookieConsent;
                   setCookieConsent(newConsent);
@@ -429,7 +456,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     console.warn(e);
                   }
                 }}
-                className={`w-10 h-5.5 rounded-full transition-all relative shrink-0 ${cookieConsent ? 'bg-[#0f9d58]' : 'bg-[#e3e2e0]'}`}
+                className={`w-10 h-5.5 rounded-full transition-all relative shrink-0 cursor-pointer ${cookieConsent ? '' : 'bg-[#e3e2e0]'}`}
+                style={cookieConsent ? { backgroundColor: accentColor } : undefined}
                 aria-label="Toggle Cookies and Analytics"
               >
                 <div 
@@ -440,17 +468,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Expiry Window */}
             <div className="space-y-1.5 pt-3 border-t border-slate-100 px-1">
-              <span className="text-[11px] sm:text-[12px] font-bold text-[#0f9d58] block uppercase tracking-wider">Expiry Warning Window</span>
+              <span className="text-[11px] sm:text-[12px] font-bold text-[#0f9d58] block uppercase tracking-wider">
+                Expiry Warning Window
+              </span>
               <div className="grid grid-cols-3 gap-1.5">
                 {[30, 60, 90].map((days, dIdx) => (
                   <button
                     key={`days-opt-${days}-${dIdx}`}
+                    type="button"
                     onClick={() => setAlertThreshold(days)}
-                    className={`py-1.5 rounded-lg border transition-all text-[10px] font-bold ${
+                    className={`py-1.5 rounded-lg border transition-all text-[10px] font-bold cursor-pointer ${
                       alertThreshold === days 
-                        ? 'bg-[#0f9d58] text-white border-[#0f9d58]' 
+                        ? 'text-white shadow-2xs' 
                         : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
+                    style={alertThreshold === days ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
                   >
                     {days} Days
                   </button>
@@ -461,7 +493,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Low Stock */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3 px-1">
               <div className="flex-1">
-                <span className="text-[12px] sm:text-[13px] font-bold text-[#0f9d58] block leading-tight">Low Stock Limit</span>
+                <span className="text-[12px] sm:text-[13px] font-bold text-[#0f9d58] block leading-tight">
+                  Low Stock Limit
+                </span>
                 <span className="text-[10px] text-[#5f6368] block">Alert when medication pills are low</span>
               </div>
               <input
@@ -476,7 +510,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* AESTHETICS & THEMES */}
           <div className="space-y-3 pt-4 border-t border-[#e3e2e0]/60">
-            <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-[#0f9d58] px-1">Aesthetics & Themes</h4>
+            <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-[#0f9d58] px-1">
+              Aesthetics & Themes
+            </h4>
             
             {/* Accent color */}
             <div className="space-y-1.5 px-1">
@@ -485,14 +521,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {colors.map((color, cIdx) => (
                   <button
                     key={`color-opt-${color.value}-${cIdx}`}
+                    type="button"
                     onClick={() => setAccentColor(color.value)}
-                    className={`w-6 h-6 rounded-full border transition-all flex items-center justify-center shadow-xs ${
-                      accentColor === color.value ? 'border-slate-800 scale-110 ring-2 ring-[#0f9d58]/10' : 'border-transparent opacity-75 hover:opacity-100'
+                    className={`w-7 h-7 rounded-full border transition-all flex items-center justify-center shadow-xs cursor-pointer ${
+                      accentColor === color.value ? 'scale-110' : 'border-transparent opacity-75 hover:opacity-100'
                     }`}
-                    style={{ backgroundColor: color.value }}
+                    style={{ 
+                      backgroundColor: color.value,
+                      borderColor: accentColor === color.value ? '#1e293b' : 'transparent',
+                      boxShadow: accentColor === color.value ? `0 0 0 2px ${color.value}40` : undefined
+                    }}
+                    title={color.name}
                   >
                     {accentColor === color.value && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-white shadow-xs" />
+                      <div className="w-2 h-2 rounded-full bg-white shadow-xs" />
                     )}
                   </button>
                 ))}
@@ -500,15 +542,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-
-
-          {/* SUPABASE SQL CLOUD BACKUP */}
+          {/* BACKUP */}
           <div className="pt-4 border-t border-[#e3e2e0]/60 space-y-2.5">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
                 <Database size={15} className="text-[#0f9d58]" />
                 <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-[#0f9d58]">
-                  Supabase SQL Backup
+                  Backup
                 </h4>
               </div>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -659,7 +699,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Sign Out
             </button>
             <p className="text-[11px] font-medium text-slate-400 mt-1 select-none">
-              DawaSnap AI &bull; Version 1.2.0 (Build 9)
+              DawaSnap AI &bull; Version 1.1.9 (Build 11)
             </p>
           </div>
 
