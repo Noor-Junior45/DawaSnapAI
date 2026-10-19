@@ -2736,8 +2736,8 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen flex flex-col bg-[#faf8f5] text-[#1f1f1f] font-sans selection:bg-[#0f9d58] selection:text-white">
-      {/* Glossy Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-[#e3e2e0]/80 px-3 py-3 sm:px-4 sm:py-4 shadow-sm">
+      {/* Glossy Header with edge-to-edge safe area support */}
+      <header className="sticky top-0 z-40 bg-white border-b border-[#e3e2e0]/80 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:px-4 sm:pt-[max(1rem,env(safe-area-inset-top))] sm:pb-4 shadow-sm">
         <div className="max-w-2xl mx-auto space-y-3 sm:space-y-4">
           <div className="flex justify-between items-center">
             <div>

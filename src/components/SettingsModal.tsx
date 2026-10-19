@@ -625,7 +625,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               )}
 
-              {/* Frequently Asked Questions */}
+              {/* FAQ */}
               {onOpenFaq && (
                 <button 
                   type="button"
@@ -634,12 +634,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   <span className="text-[12px] font-bold text-[#1a3a2a] flex items-center gap-2.5">
                     <HelpCircle size={15} className="text-[#0f9d58]" />
-                    Frequently Asked Questions (FAQ)
+                    FAQ
                   </span>
                 </button>
               )}
 
-              {/* 1. User Guide & Manual */}
+              {/* 1. User Guide */}
               <button 
                 type="button"
                 onClick={() => { onClose(); onOpenGuide(); }}
@@ -647,7 +647,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <span className="text-[12px] font-bold text-[#1a3a2a] flex items-center gap-2.5">
                   <BookOpen size={15} className="text-[#0f9d58]" />
-                  User Guide & Manual
+                  User Guide
                 </span>
               </button>
 

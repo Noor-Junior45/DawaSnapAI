@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   ChevronLeft, 
   Trash2, 
-  ShieldAlert, 
   Mail, 
   AlertTriangle, 
   CheckCircle2, 
@@ -10,8 +9,7 @@ import {
   UserX, 
   Send, 
   Loader2, 
-  LogIn, 
-  KeyRound
+  LogIn
 } from 'lucide-react';
 import { useEdgeSwipeBack } from '../utils/mobileGestures';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../utils/haptics';
@@ -30,7 +28,6 @@ export const AccountDeletionPage: React.FC<AccountDeletionPageProps> = ({
   onExecuteAccountDeletion
 }) => {
   useEdgeSwipeBack({ onBack });
-  const supportEmail = 'newluckypharmacy@gmail.com';
 
   // State for logged-in deletion confirmation
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -59,7 +56,7 @@ export const AccountDeletionPage: React.FC<AccountDeletionPageProps> = ({
       triggerSuccessHaptic();
     } catch (err: any) {
       console.error('Sign-in on deletion page failed:', err);
-      setSignInError(err?.message || 'Failed to sign in with Google. Please use the manual request form below.');
+      setSignInError(err?.message || 'Failed to sign in. Please use the web deletion request below.');
     } finally {
       setIsSigningIn(false);
     }
@@ -76,7 +73,7 @@ export const AccountDeletionPage: React.FC<AccountDeletionPageProps> = ({
       triggerSuccessHaptic();
     } catch (err: any) {
       console.error('Account deletion failed:', err);
-      setDeleteError(err.message || 'Failed to complete account deletion. Please re-authenticate and try again.');
+      setDeleteError(err.message || 'Failed to complete account deletion. Please try again.');
     } finally {
       setIsDeleting(false);
     }
@@ -109,234 +106,244 @@ export const AccountDeletionPage: React.FC<AccountDeletionPageProps> = ({
       triggerSuccessHaptic();
     } catch (err: any) {
       console.error('Web deletion form submission error:', err);
-      setFormError(err.message || 'Server unavailable. You may also email our data protection officer directly.');
+      setFormError(err.message || 'Server unavailable. Please try again shortly.');
     } finally {
       setIsSubmittingForm(false);
     }
   };
 
+  const dataRetentionItems = [
+    {
+      category: 'Auth & Profile',
+      description: 'Account UID, email, name, photo',
+      action: 'Deleted immediately',
+      isImmediate: true
+    },
+    {
+      category: 'Medication Vault',
+      description: 'Medicines, dosages, forms, stock, schedule',
+      action: 'Deleted immediately',
+      isImmediate: true
+    },
+    {
+      category: 'Dose History & Logs',
+      description: 'Taken, skipped, and snoozed history logs',
+      action: 'Deleted immediately',
+      isImmediate: true
+    },
+    {
+      category: 'AI Consultations',
+      description: 'Chat messages and pharmacist consultations',
+      action: 'Deleted immediately',
+      isImmediate: true
+    },
+    {
+      category: 'Device Tokens & Cache',
+      description: 'Push notification tokens, offline database',
+      action: 'Deleted immediately',
+      isImmediate: true
+    },
+    {
+      category: 'System Logs & Backups',
+      description: 'Aggregated anti-abuse logs (no health data)',
+      action: 'Purged in 14–30 days',
+      isImmediate: false
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-[#faf8f5] text-slate-900 font-sans selection:bg-rose-500 selection:text-white flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-8 py-3.5 shadow-2xs">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      {/* Phone-optimized Clean Header */}
+      <header className="sticky top-0 z-30 bg-[#faf8f5]/95 backdrop-blur-md border-b border-stone-200/80 px-4 py-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
             <button
-              onClick={onBack}
-              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 active:scale-95 cursor-pointer"
+              onClick={() => {
+                triggerLightHaptic();
+                onBack();
+              }}
+              className="p-2 -ml-2 hover:bg-stone-200/60 rounded-full transition-colors text-slate-700 active:scale-95 cursor-pointer"
               title="Back"
+              aria-label="Back"
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={22} />
             </button>
-            <div className="flex items-center gap-2">
-              <Trash2 size={18} className="text-rose-600" />
-              <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-                Account &amp; Data Deletion Portal
-              </h1>
-            </div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">
+              Delete Account &amp; Data
+            </h1>
           </div>
         </div>
       </header>
 
-      {/* Main Document */}
-      <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-8 py-8 space-y-8">
-        {/* Title */}
-        <div className="border-b border-slate-200 pb-6 space-y-2">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-            <ShieldAlert size={12} /> Google Play Store &amp; Indus Appstore Data Safety
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            Permanent Account &amp; Medication Vault Deletion
-          </h2>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            In compliance with Google Play Store User Data policies, Indian Digital Personal Data Protection (DPDP) Act 2023, and global privacy standards, you have the right to permanently purge your account and all associated health records.
-          </p>
-        </div>
+      {/* Main Content: Phone Screen Layout (Clean, Minimalist, Less Box Design) */}
+      <main className="flex-1 max-w-md mx-auto w-full px-4 py-5 space-y-7 pb-12">
 
-        {/* Immediate Deletion Section */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
-              <UserX size={20} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Direct Self-Service Deletion</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Authenticate with your registered Google account to immediately and irreversibly delete your account, Firestore vault, and push notification tokens.
-              </p>
-            </div>
+        {/* 1. Direct Self-Service Deletion */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <UserX size={18} className="text-rose-600 shrink-0" />
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+              Direct Self-Service Deletion
+            </h2>
           </div>
+          
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Immediately and permanently delete your account, saved medications, dose history, and notification schedules.
+          </p>
 
           {deleteSuccess ? (
-            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-2">
-              <div className="flex items-center gap-2 font-bold text-sm">
-                <CheckCircle2 size={18} className="text-emerald-600" />
-                Account &amp; Data Successfully Deleted
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 space-y-1.5">
+              <div className="flex items-center gap-2 font-bold text-xs">
+                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                Account &amp; Data Permanently Deleted
               </div>
-              <p className="text-xs text-emerald-700 leading-relaxed">
-                Your authentication account, cloud medicine records, dose history, and device caches have been completely wiped. You may now safely close this window or uninstall the application.
+              <p className="text-[11px] text-emerald-700 leading-relaxed">
+                Your cloud vault and credentials have been erased. You can now safely close the app or uninstall it.
               </p>
             </div>
           ) : user ? (
-            <div className="space-y-4 pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                <div>
-                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Signed In Account</div>
-                  <div className="text-sm font-bold text-slate-800">{user.email || user.uid}</div>
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center justify-between py-2 border-b border-stone-200">
+                <div className="min-w-0 pr-3">
+                  <div className="text-[11px] text-slate-500">Currently signed in as:</div>
+                  <div className="text-xs font-semibold text-slate-800 truncate">
+                    {user.email || user.uid}
+                  </div>
                 </div>
-                <button
-                  onClick={() => {
-                    triggerLightHaptic();
-                    setShowConfirmModal(true);
-                  }}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-2"
-                >
-                  <Trash2 size={14} />
-                  Delete My Account Now
-                </button>
               </div>
 
               {deleteError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs">
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-xs">
                   {deleteError}
                 </div>
               )}
+
+              <button
+                onClick={() => {
+                  triggerLightHaptic();
+                  setShowConfirmModal(true);
+                }}
+                className="w-full h-11 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.99]"
+              >
+                <Trash2 size={15} />
+                Delete My Account Now
+              </button>
             </div>
           ) : (
-            <div className="space-y-4 pt-2 border-t border-slate-100">
+            <div className="space-y-3 pt-1">
               <p className="text-xs text-slate-600">
-                You are currently not signed in. You can sign in with Google below to proceed with immediate self-service account deletion:
+                Sign in with Google to immediately authenticate and delete your account:
               </p>
-              <button
-                onClick={handleSignInOnPage}
-                disabled={isSigningIn}
-                className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
-              >
-                {isSigningIn ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={14} />}
-                Sign In with Google to Delete Account
-              </button>
+              
               {signInError && (
-                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs">
+                <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs">
                   {signInError}
                 </div>
               )}
+
+              <button
+                onClick={handleSignInOnPage}
+                disabled={isSigningIn}
+                className="w-full h-11 bg-slate-900 hover:bg-slate-800 active:bg-black text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 active:scale-[0.99]"
+              >
+                {isSigningIn ? <Loader2 size={15} className="animate-spin" /> : <LogIn size={15} />}
+                Sign In with Google to Delete Account
+              </button>
             </div>
           )}
-        </div>
+        </section>
 
-        {/* What Is Deleted / Retained Table */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Database size={18} className="text-[#0f9d58]" />
-            Data Deletion &amp; Retention Breakdown
-          </h3>
+        {/* Subtle Divider */}
+        <div className="h-px bg-stone-200" />
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="py-2.5 px-3 font-bold text-slate-700">Category</th>
-                  <th className="py-2.5 px-3 font-bold text-slate-700">Specific Data Handled</th>
-                  <th className="py-2.5 px-3 font-bold text-slate-700">Action &amp; Retention</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-600">
-                <tr>
-                  <td className="py-2.5 px-3 font-semibold text-slate-800">Auth &amp; Profile</td>
-                  <td className="py-2.5 px-3">Google Auth UID, email address, profile name, photo URL</td>
-                  <td className="py-2.5 px-3 text-rose-600 font-bold">Deleted immediately</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-3 font-semibold text-slate-800">Medication Records</td>
-                  <td className="py-2.5 px-3">Medicine names, dosages, expiry dates, schedules, forms, quantities</td>
-                  <td className="py-2.5 px-3 text-rose-600 font-bold">Deleted immediately</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-3 font-semibold text-slate-800">Dose &amp; Edit History</td>
-                  <td className="py-2.5 px-3">All subcollection history documents and audit logs</td>
-                  <td className="py-2.5 px-3 text-rose-600 font-bold">Deleted immediately</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-3 font-semibold text-slate-800">AI Consultations</td>
-                  <td className="py-2.5 px-3">All chat messages, advice history, and consultation logs</td>
-                  <td className="py-2.5 px-3 text-rose-600 font-bold">Deleted immediately</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-3 font-semibold text-slate-800">Notification Tokens</td>
-                  <td className="py-2.5 px-3">FCM device tokens and server-side background schedules</td>
-                  <td className="py-2.5 px-3 text-rose-600 font-bold">Deleted immediately</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-3 font-semibold text-slate-800">Physical Device Cache</td>
-                  <td className="py-2.5 px-3">IndexedDB photo storage, localStorage preferences</td>
-                  <td className="py-2.5 px-3 text-rose-600 font-bold">Cleared on device</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-3 font-semibold text-slate-800">Server Logs (Non-Health)</td>
-                  <td className="py-2.5 px-3">Aggregated HTTP status codes and security access logs (no PII or pill images)</td>
-                  <td className="py-2.5 px-3 text-amber-700">Retained up to 14 days for anti-abuse &amp; DDoS audit, then automatically purged</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-3 font-semibold text-slate-800">Cloud Disaster Snapshots</td>
-                  <td className="py-2.5 px-3">Automated cloud backup snapshots</td>
-                  <td className="py-2.5 px-3 text-amber-700">Rotated and overwritten within 30 days</td>
-                </tr>
-              </tbody>
-            </table>
+        {/* 2. Data Deletion & Retention Breakdown Box */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Database size={18} className="text-[#0f9d58] shrink-0" />
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+              Data Deletion &amp; Retention Breakdown
+            </h2>
           </div>
-        </div>
 
-        {/* Fallback Web Form (Without App Installed) */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center shrink-0">
-              <Mail size={18} />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Web Deletion Request (Without App Installed)</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                If you have uninstalled DawaSnap AI or cannot sign in with Google, submit this official request form. Our data governance team will verify and execute complete account and vault deletion within 7 business days.
-              </p>
-            </div>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Overview of how your personal health data is processed and permanently purged upon deletion:
+          </p>
+
+          {/* Clean phone-friendly item list (no overflowing desktop table) */}
+          <div className="divide-y divide-stone-200/80 pt-1">
+            {dataRetentionItems.map((item, idx) => (
+              <div key={idx} className="py-2.5 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-slate-800">
+                    {item.category}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                    {item.description}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className={`text-[11px] font-bold ${item.isImmediate ? 'text-rose-600' : 'text-amber-700'}`}>
+                    {item.action}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
+        </section>
+
+        {/* Subtle Divider */}
+        <div className="h-px bg-stone-200" />
+
+        {/* 3. Web Deletion Request (Without App Installed) */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Mail size={18} className="text-slate-700 shrink-0" />
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+              Web Deletion Request
+            </h2>
+          </div>
+
+          <p className="text-xs text-slate-500 leading-relaxed">
+            If you uninstalled the app or cannot sign in with Google, submit this request. We will verify and purge all records within 7 business days.
+          </p>
 
           {submissionReference ? (
-            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-2">
-              <div className="flex items-center gap-2 font-bold text-sm">
-                <CheckCircle2 size={18} className="text-emerald-600" />
-                Deletion Request Registered
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 space-y-1.5">
+              <div className="flex items-center gap-2 font-bold text-xs">
+                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                Request Registered Successfully
               </div>
-              <p className="text-xs text-emerald-800">
-                Your request has been officially recorded. Reference ID: <strong className="font-mono bg-white px-2 py-0.5 rounded border border-emerald-300">{submissionReference}</strong>
+              <p className="text-[11px] text-emerald-800">
+                Reference ID: <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-300">{submissionReference}</strong>
               </p>
               <p className="text-[11px] text-emerald-700">
-                All records associated with your email will be verified and purged within 7 business days.
+                All records associated with this email will be purged within 7 business days.
               </p>
             </div>
           ) : (
-            <form onSubmit={handleWebFormSubmit} className="space-y-4 pt-2 border-t border-slate-100">
+            <form onSubmit={handleWebFormSubmit} className="space-y-3.5 pt-1">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Registered Account Email Address *
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Registered Email Address *
                 </label>
                 <input
                   type="email"
                   required
                   value={requestEmail}
                   onChange={(e) => setRequestEmail(e.target.value)}
-                  placeholder="e.g. yourname@gmail.com"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0f9d58]/30 focus:border-[#0f9d58]"
+                  placeholder="yourname@gmail.com"
+                  className="w-full h-11 px-3.5 rounded-xl border border-stone-300 bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0f9d58]/30 focus:border-[#0f9d58]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-xs font-medium text-slate-700 mb-1">
                   Reason for Deletion (Optional)
                 </label>
                 <select
                   value={requestReason}
                   onChange={(e) => setRequestReason(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0f9d58]/30 focus:border-[#0f9d58]"
+                  className="w-full h-11 px-3.5 rounded-xl border border-stone-300 bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0f9d58]/30 focus:border-[#0f9d58]"
                 >
                   <option value="No longer using the application">No longer using the application</option>
                   <option value="Privacy concerns">Privacy concerns</option>
@@ -345,22 +352,22 @@ export const AccountDeletionPage: React.FC<AccountDeletionPageProps> = ({
                 </select>
               </div>
 
-              <div className="flex items-start gap-2.5 pt-1">
+              <div className="flex items-start gap-2.5 pt-0.5">
                 <input
                   type="checkbox"
                   id="confirm-web-delete"
                   checked={requestConfirmed}
                   onChange={(e) => setRequestConfirmed(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-300 text-[#0f9d58] focus:ring-[#0f9d58]"
+                  className="mt-0.5 w-4 h-4 rounded border-stone-300 text-[#0f9d58] focus:ring-[#0f9d58]"
                   required
                 />
-                <label htmlFor="confirm-web-delete" className="text-xs text-slate-600 leading-snug">
-                  I understand that this action is irreversible and will permanently delete all my medicine records, dose logs, and personal profile from DawaSnap AI.
+                <label htmlFor="confirm-web-delete" className="text-xs text-slate-600 leading-snug cursor-pointer">
+                  I confirm that this action is irreversible and will permanently delete my medication records and profile.
                 </label>
               </div>
 
               {formError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs">
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-xs">
                   {formError}
                 </div>
               )}
@@ -368,38 +375,29 @@ export const AccountDeletionPage: React.FC<AccountDeletionPageProps> = ({
               <button
                 type="submit"
                 disabled={isSubmittingForm || !requestConfirmed || !requestEmail}
-                className="w-full sm:w-auto px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full h-11 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 active:scale-[0.99]"
               >
-                {isSubmittingForm ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                Submit Formal Deletion Request
+                {isSubmittingForm ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                Submit Web Deletion Request
               </button>
             </form>
           )}
-        </div>
+        </section>
 
-        {/* Compliance & Contact */}
-        <div className="p-6 rounded-2xl bg-slate-100 border border-slate-200 text-xs text-slate-600 space-y-2">
-          <div className="font-bold text-slate-800">Operator &amp; Grievance Redressal</div>
-          <div><strong>Operator:</strong> DawaSnap (MD Hassan)</div>
-          <div><strong>Grievance Officer:</strong> MD Hassan</div>
-          <div><strong>Contact Email:</strong> {supportEmail}</div>
-          <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-200">
-            You may also revoke Google Account OAuth access directly via Google Account Security: <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="text-[#0f9d58] underline">https://myaccount.google.com/permissions</a>
-          </div>
-        </div>
       </main>
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-slate-200 shadow-2xl space-y-4">
-            <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
-              <AlertTriangle size={24} />
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl p-5 max-w-sm w-full border border-stone-200 shadow-2xl space-y-4 animate-in fade-in duration-150">
+            <div className="w-11 h-11 rounded-full bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle size={22} />
             </div>
+            
             <div className="text-center space-y-1">
-              <h3 className="text-base font-bold text-slate-900">Confirm Irreversible Deletion</h3>
+              <h3 className="text-sm font-bold text-slate-900">Confirm Irreversible Deletion</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Type <strong>DELETE</strong> below to permanently erase your account, all recorded medications, and notification schedules.
+                Type <strong className="text-rose-600 font-mono">DELETE</strong> below to permanently erase your account and all medication vault records.
               </p>
             </div>
 
@@ -408,27 +406,28 @@ export const AccountDeletionPage: React.FC<AccountDeletionPageProps> = ({
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder="Type DELETE"
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-center font-mono font-bold text-sm text-slate-800 uppercase focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+              className="w-full h-11 border border-stone-300 rounded-xl text-center font-mono font-bold text-sm text-slate-900 uppercase focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+              autoFocus
             />
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 onClick={() => {
                   setShowConfirmModal(false);
                   setConfirmText('');
                 }}
                 disabled={isDeleting}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                className="flex-1 h-11 bg-stone-100 hover:bg-stone-200 active:bg-stone-300 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleInAppDelete}
                 disabled={confirmText !== 'DELETE' || isDeleting}
-                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-1 h-11 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5"
               >
                 {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                Confirm &amp; Delete
+                Confirm Delete
               </button>
             </div>
           </div>

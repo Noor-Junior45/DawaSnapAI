@@ -32,33 +32,23 @@ export const UserGuidePage: React.FC<UserGuidePageProps> = ({ onBack }) => {
   return (
     <div className="min-h-screen bg-[#fbf9f4] text-[#2c2824] font-sans selection:bg-[#0f9d58] selection:text-white flex flex-col">
       {/* Sticky Clean Header with soft document tone */}
-      <header className="sticky top-0 z-30 bg-[#faf6ee]/95 backdrop-blur-md border-b border-[#e7e0d2] px-3.5 sm:px-8 py-3.5">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 bg-[#faf6ee]/95 backdrop-blur-md border-b border-[#e7e0d2] px-4 sm:px-6 py-3.5">
+        <div className="max-w-4xl mx-auto flex items-center">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={() => {
                 triggerLightHaptic();
                 onBack();
               }}
-              className="p-2 hover:bg-[#ede5d6] rounded-full transition-colors text-[#57534e] active:scale-95 cursor-pointer"
+              className="p-2 -ml-2 hover:bg-[#ede5d6] rounded-full transition-colors text-[#57534e] active:scale-95 cursor-pointer"
               title="Back"
               aria-label="Back"
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={22} />
             </button>
-            <div className="flex items-center gap-2.5">
-              <BookOpen size={22} className="text-[#0f9d58] shrink-0" />
-              <h1 className="text-base sm:text-lg font-bold text-[#1c1917] tracking-tight">
-                User Guide &amp; Operating Manual
-              </h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-xs font-semibold text-[#57534e]">
-            <a href="/privacy" className="hover:text-[#0f9d58] transition-colors">Privacy</a>
-            <span>•</span>
-            <a href="/terms" className="hover:text-[#0f9d58] transition-colors">Terms</a>
-            <span>•</span>
-            <a href="/delete-account" className="hover:text-rose-600 transition-colors">Delete Account</a>
+            <h1 className="text-base sm:text-lg font-bold text-[#1c1917] tracking-tight">
+              User Guide
+            </h1>
           </div>
         </div>
       </header>

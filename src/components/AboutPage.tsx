@@ -1,5 +1,7 @@
 import React from 'react';
-import { ArrowLeft, Shield, Globe, Award, Sparkles, HeartPulse, CheckCircle2, Mail, ExternalLink, BookOpen, Scale, FileText } from 'lucide-react';
+import { ChevronLeft, Shield, Globe, Award, Sparkles, HeartPulse, CheckCircle2, Mail, ExternalLink, BookOpen, Scale, FileText } from 'lucide-react';
+import { useEdgeSwipeBack } from '../utils/mobileGestures';
+import { triggerLightHaptic } from '../utils/haptics';
 
 interface AboutPageProps {
   onBack: () => void;
@@ -7,36 +9,29 @@ interface AboutPageProps {
 }
 
 export const AboutPage: React.FC<AboutPageProps> = ({ onBack, isLoggedIn = false }) => {
+  useEdgeSwipeBack({ onBack });
+
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#1f1f1f] font-sans antialiased selection:bg-[#0f9d58] selection:text-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-[#e3e2e0] shadow-xs">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-[#e3e2e0] shadow-2xs px-4 sm:px-6 py-3.5">
+        <div className="max-w-4xl mx-auto flex items-center">
+          <div className="flex items-center gap-2.5">
             <button
-              onClick={onBack}
-              className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-1.5 text-sm font-semibold cursor-pointer"
+              onClick={() => {
+                triggerLightHaptic();
+                onBack();
+              }}
+              className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors text-slate-700 active:scale-95 cursor-pointer"
               aria-label="Go back"
+              title="Back"
             >
-              <ArrowLeft size={18} />
-              <span>Back</span>
+              <ChevronLeft size={22} />
             </button>
-            <div className="h-5 w-px bg-slate-200" />
-            <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="DawaSnap AI Logo" className="w-8 h-8 object-contain rounded-lg border border-slate-200 p-0.5 bg-white" />
-              <span className="font-extrabold text-base text-[#0f9d58] tracking-tight">
-                DawaSnap AI
-              </span>
-            </div>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+              About DawaSnap AI
+            </h1>
           </div>
-
-          <a
-            href="/"
-            onClick={(e) => { e.preventDefault(); onBack(); }}
-            className="px-4 py-1.5 text-xs font-bold text-white bg-[#0f9d58] hover:bg-[#0b8043] rounded-full transition-all shadow-xs"
-          >
-            {isLoggedIn ? 'Go to Vault' : 'Open App'}
-          </a>
         </div>
       </header>
 

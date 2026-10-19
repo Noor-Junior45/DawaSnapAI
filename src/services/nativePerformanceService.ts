@@ -90,9 +90,10 @@ export async function initNativePerformance(options: PerformanceOptions = {}): P
 
   if (Capacitor.isNativePlatform()) {
     try {
-      // 1. Configure Status Bar
-      await StatusBar.setStyle({ style: Style.Light });
-      await StatusBar.setBackgroundColor({ color: '#0f9d58' });
+      // 1. Configure Status Bar for modern Edge-to-Edge display (Android 15 / SDK 35+)
+      // In Android 15, edge-to-edge is mandatory and setBackgroundColor is deprecated.
+      await StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+      await StatusBar.setStyle({ style: Style.Light }).catch(() => {});
     } catch (e) {
       // Non-fatal on web/older android
     }
